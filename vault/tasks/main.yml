@@ -1,0 +1,8 @@
+- include_tasks: preinstall.yml
+- include_tasks: install.yml
+- meta: flush_handlers
+- include_tasks: initialize.yml
+  with_items: '{{ groups[vault_servers_group_name] }}'
+  when: vault_auto_unseal
+- include_tasks: unseal.yml
+  when: vault_auto_unseal

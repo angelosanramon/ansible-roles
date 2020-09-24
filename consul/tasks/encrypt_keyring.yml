@@ -1,0 +1,57 @@
+- name: set encrypt keyring from command line options
+  set_fact:
+    encrypt_keyring: >-
+      {%- for cmdline_option in consul_commandline_options
+        if 'encrypt=' in cmdline_option or '-encrypt=' in cmdline_option -%}
+      {{ cmdline_option.split('=', 1)[1] }}
+      {%- endfor -%}
+
+- name: set encrypt keyring from config options
+  set_fact:
+    encrypt_keyring: >-
+      {{ consul_config_options.encrypt|default('', true) }}
+  when: encrypt_keyring == '' or encrypt_keyring is none
+
+- block:
+    - name: check consul config file exist
+      stat:
+        path: '{{ consul_config_path }}/{{ consul_config_file }}'
+      register: config_file_check
+
+    - name: read consul config file
+      slurp:
+        src: '{{ consul_config_path }}/{{ consul_config_file }}'
+      register: config_file_content
+      no_log: true
+      when: config_file_check.stat.exists
+
+    - name: set encrypt keyring fact from config file
+      set_fact:
+        encrypt_keyring: >-
+          {{ config_file_content.content|b64decode|from_json|
+            json_query('encrypt') }}
+      no_log: true
+      when: config_file_check.stat.exists
+  when: encrypt_keyring == '' or encrypt_keyring is none
+  run_once: yes
+
+- block:
+    - name: generate new encrypt keyring
+      shell: |
+        {{ consul_bin_path }}/consul keygen
+      register: keygen_result
+      no_log: true
+
+    - set_fact:
+        encrypt_keyring: '{{ keygen_result.stdout }}'
+      no_log: true
+  when: encrypt_keyring == '' or encrypt_keyring is none
+  run_once: yes
+
+- set_fact:
+    consul_config_options: >-
+      {{ consul_config_options | combine({'encrypt': encrypt_keyring}) }}
+  no_log: true
+  when: 
+    - encrypt_keyring is not none
+    - encrypt_keyring != ''

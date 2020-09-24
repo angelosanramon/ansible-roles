@@ -1,0 +1,11 @@
+- firewalld:
+    port: '{{ item }}'
+    permanent: yes
+    state: enabled
+  with_items: '{{ vault_firewall_ports }}'
+  notify: restart firewalld
+
+- name: start firewalld
+  service:
+    name: firewalld
+    state: started

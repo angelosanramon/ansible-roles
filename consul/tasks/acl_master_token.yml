@@ -1,0 +1,51 @@
+- name: set temporary variables
+  set_fact:
+    acl_master_token: >-
+     {{ consul_config_options.acl.tokens.master|default('', true) }}
+
+- block:
+    - name: check consul config file exist
+      stat:
+        path: '{{ consul_config_path }}/{{ consul_config_file }}'
+      register: config_file_check
+
+    - name: read consul config file
+      slurp:
+        src: '{{ consul_config_path }}/{{ consul_config_file }}'
+      register: config_file_content
+      no_log: true
+      when: config_file_check.stat.exists
+
+    - name: set acl master token fact from config file
+      set_fact:
+        acl_master_token: >-
+          {{ config_file_content.content|b64decode|from_json|
+            json_query('acl.tokens.master') }}
+      no_log: true
+      when: config_file_check.stat.exists
+  when: acl_master_token == ''
+  run_once: yes
+
+- block:
+    - name: generate acl master token
+      shell: |-
+        echo {{ lookup('password', '/dev/null length=32 chars=ascii_letters')|
+        to_uuid }}
+      register: generate_token_result
+      no_log: true
+
+    - set_fact:
+        acl_master_token: '{{ generate_token_result.stdout }}'
+      no_log: true
+  when: acl_master_token == '' or acl_master_token is none
+  run_once: yes
+
+- set_fact:
+    consul_config_options: >-
+      {{ consul_config_options|
+        combine({'acl': {'tokens': {'master': acl_master_token}}},
+        recursive=True) }}
+  no_log: true
+  when:
+    - acl_master_token is not none
+    - acl_master_token != ''

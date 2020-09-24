@@ -1,0 +1,8 @@
+[consul_servers]
+consul1.cluster.local   ansible_host=192.168.1.40
+consul2.cluster.local   ansible_host=192.168.1.41
+consul3.cluster.local   ansible_host=192.168.1.42
+
+[vault_servers]
+vault1.cluster.local   ansible_host=192.168.1.43
+vault2.cluster.local   ansible_host=192.168.1.44

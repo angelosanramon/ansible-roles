@@ -1,0 +1,88 @@
+- name: create consul user group
+  group:
+    name: '{{ consul_group }}'
+    state: present
+
+- name: create consul user
+  user:
+    name: '{{ consul_user }}'
+    comment: Consul user
+    group: '{{ consul_group }}'
+    shell: /bin/false
+
+- name: create directories
+  block:
+    - name: create binary directory
+      file:
+        path: '{{ consul_bin_path }}'
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: create data, configuration, and certificates directories
+      file:
+        path: '{{ item }}'
+        state: directory
+        owner: '{{ consul_user }}'
+        group: '{{ consul_group }}'
+        mode: 0700
+      with_items:
+        - '{{ consul_config_path }}'
+        - '{{ consul_configd_path }}'
+        - '{{ consul_data_path }}'
+        - '{{ consul_certs_path }}'
+
+    - name: create log and run directories
+      file:
+        path: '{{ item }}'
+        state: directory
+        owner: '{{ consul_user }}'
+        group: '{{ consul_group }}'
+        mode: 0750
+      with_items:
+        - '{{ consul_log_path }}'
+        - '{{ consul_run_path }}'
+
+- name: download consul
+  get_url:
+    url: '{{ consul_zip_url }}'
+    dest: '{{ consul_bin_path }}'
+    checksum: 'sha256:{{ consul_zip_checksum }}'
+
+- name: install consul
+  unarchive:
+    src: >-
+      {{ consul_bin_path }}/{{ (consul_zip_url|
+        urlsplit('path')).split('/')[-1] }}
+    dest: '{{ consul_bin_path }}'
+    remote_src: yes
+    validate_certs: no
+
+- include_tasks: encrypt_keyring.yml
+
+- include_tasks: acl_master_token.yml
+  when:
+    - consul_config_options.acl.enabled is defined
+    - consul_config_options.acl.enabled
+    - consul_agent_mode == 'server'
+
+- name: create consul systemd file
+  template:
+    src: consul_systemd.service.j2
+    dest: /etc/systemd/system/consul.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart consul
+
+- name: create consul config file
+  template:
+    src: config.json.j2
+    dest: '{{ consul_config_path }}/config.json'
+    owner: '{{ consul_user }}'
+    group: '{{ consul_group }}'
+    mode: 0640
+  notify: restart consul

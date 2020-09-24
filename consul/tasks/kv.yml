@@ -1,0 +1,50 @@
+- name: set kv command options
+  set_fact:
+    acquire_option: >-
+      {%- if kv.acquire|default(false, true) == true -%}
+      -acquire
+      {%- endif -%}
+    base64_option: >-
+      {%- if kv.base64|default(false, true) == true -%}
+      -base64
+      {%- endif -%}
+    cas_option: >-
+      {%- if kv.cas|default(false, true) == true -%}
+      -cas
+      {%- endif -%}
+    flags_option: >-
+      {%- if kv.flags|default(0, true) > 0 -%}
+      -flags='{{ kv.flags }}'
+      {%- endif -%}
+    modify_index_option: >-
+      {%- if kv.modify_index|default(0, true) > 0 -%}
+      -modify-index='{{ kv.modify_index }}'
+      {%- endif -%}
+    release_option: >-
+      {%- if kv.release|default(false, true) == true -%}
+      -release
+      {%- endif -%}
+    session_option: >-
+      {%- if kv.session|default(none, true) is not none -%}
+      -session='{{ kv.session }}'
+      {%- endif -%}
+    value_option: >-
+      {%- if kv.value is defined and kv.value is not none -%}
+      {{ kv.value|replace('"','\"') }}
+      {% endif %}
+
+- name: create kv
+  shell: >-
+    {{ consul_bin_path }}/consul kv put
+    -token='{{ acl_master_token }}'
+    {{ acquire_option }}
+    {{ base64_option }}
+    {{ cas_option }}
+    {{ flags_option }}
+    {{ modify_index_option }}
+    {{ release_option }}
+    {{ session_option }}
+    {{ kv. key }}
+    "{{ value_option }}"
+  register: kv_create_result
+  changed_when: false

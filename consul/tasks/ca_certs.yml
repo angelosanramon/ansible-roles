@@ -1,0 +1,132 @@
+- name: set temporary variables
+  set_fact:
+    ca_cert: ''
+    ca_key: ''
+
+- block:
+    - name: check CA cert exist
+      stat:
+        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+      register: ca_cert_check
+
+    - name: check CA key exist
+      stat:
+        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+      register: ca_key_check
+
+    - name: validate CA cert and key match
+      shell: |-
+        keysha=$(openssl pkey -in {{ consul_domain }}-agent-ca-key.pem -pubout \
+          -outform pem || echo 'key invalid' | sha256sum)
+        certsha=$(openssl x509 -in {{ consul_domain }}-agent-ca.pem -pubkey \
+          -noout -outform pem || echo 'cert invalid' | sha256sum)
+        if [ "$certsha" == "$keysha" ]; then echo valid; else echo invalid; fi
+      args:
+        chdir: '{{ consul_certs_path }}'
+      register: ca_cert_validation
+      when: 
+        - ca_cert_check.stat.exists
+        - ca_key_check.stat.exists
+      changed_when: false
+
+    - name: load CA cert from CA file
+      slurp:
+        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+      register: ca_cert_content
+      no_log: true
+      when:
+        - ca_cert_check.stat.exists
+        - ca_key_check.stat.exists
+        - ca_cert_validation.stdout == 'valid'
+
+    - name: set CA cert fact from config file
+      set_fact:
+        ca_cert: '{{ ca_cert_content.content | b64decode }}'
+      no_log: true
+      when:
+        - ca_cert_check.stat.exists
+        - ca_key_check.stat.exists
+        - ca_cert_validation.stdout == 'valid'
+
+    - name: load CA key from CA key file
+      slurp:
+        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+      register: ca_key_content
+      no_log: true
+      when:
+        - ca_cert_check.stat.exists
+        - ca_key_check.stat.exists
+        - ca_cert_validation.stdout == 'valid'
+
+    - name: set CA key fact from config file
+      set_fact:
+        ca_key: '{{ ca_key_content.content | b64decode }}'
+      no_log: true
+      when:
+        - ca_cert_check.stat.exists
+        - ca_key_check.stat.exists
+        - ca_cert_validation.stdout == 'valid'
+  run_once: yes
+
+- block:
+    - name: delete CA cert file
+      file:
+        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+        state: absent
+
+    - name: delete CA key file
+      file:
+        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+        state: absent
+
+    - name: generate new CA certificates
+      shell: |-
+        {{ consul_bin_path }}/consul tls ca create \
+          {{ consul_tls_ca_create_options | join(' ') }}
+        chown {{ consul_user }}:{{ consul_group }} {{ consul_domain }}-agent-ca*
+        chmod 600 {{ consul_domain }}-agent-ca-key.pem
+      args:
+        chdir: '{{ consul_certs_path }}'
+      no_log: true
+
+    - name: load new CA cert from new CA cert file
+      slurp:
+        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+      register: ca_cert_content
+      no_log: true
+
+    - name: set new CA cert fact
+      set_fact:
+        ca_cert: '{{ ca_cert_content.content | b64decode }}'
+      no_log: true
+
+    - name: load new CA key from new CA key file
+      slurp:
+        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+      register: ca_key_content
+      no_log: true
+
+    - name: set new CA key fact
+      set_fact:
+        ca_key: '{{ ca_key_content.content | b64decode }}'
+      no_log: true
+  when: ca_cert == '' or ca_key == '' or ca_cert_validation.stdout != 'valid'
+  run_once: yes
+
+- name: copy CA cert to all servers
+  copy:
+    content: '{{ ca_cert }}'
+    dest: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+    owner: '{{ consul_user }}'
+    group: '{{ consul_group }}'
+    mode: 0644
+  no_log: true
+
+- name: copy CA key to all servers
+  copy:
+    content: '{{ ca_key }}'
+    dest: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+    owner: '{{ consul_user }}'
+    group: '{{ consul_group }}'
+    mode: 0600
+  no_log: true

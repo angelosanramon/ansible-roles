@@ -1,0 +1,26 @@
+- name: reload vault
+  command: "pkill --pidfile '{{ vault_run_path }}/vaultg.pid' --signal SIGHUP"
+  listen: reload vault
+
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: restart vault
+  service:
+    name: vault
+    state: restarted
+  listen: restart vault
+
+- name: start vault
+  service:
+    name: vault
+    state: started
+  listen: start vault
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld

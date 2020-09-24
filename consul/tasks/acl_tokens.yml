@@ -1,0 +1,268 @@
+- name: set acl token command options
+  set_fact:
+    accessor_id_option: >-
+      {%- if acl_token.accessor|default(none, true) is not none -%}
+      -accessor='{{ acl_token.accessor }}'
+      {%- endif -%}
+    secret_id_option: >-
+      {%- if acl_token.secret|default(none, true) is not none -%}
+      -secret='{{ acl_token.secret }}'
+      {%- endif -%}
+    description_option: >-
+      {%- if acl_token.description|default(none, true) is not none -%}
+      -description='{{ acl_token.description }}'
+      {%- endif -%}
+    expires_ttl_option: >-
+      {%- if acl_token.expires_ttl|default(none, true) is not none -%}
+      -expires-ttl='{{ acl_token.expires_ttl }}'
+      {%- endif -%}
+    local_option: >-
+      {%- if acl_token.local|default(false, true) == true -%}
+      -local
+      {%- endif -%}
+    meta_option: >-
+      {%- if acl_token.meta|default(false, true) == true -%}
+      -meta
+      {%- endif -%}
+    node_identity_option: >-
+      {%- if acl_token.node_identity|default([], true)|length > 0 -%}
+      -node-identity='{{ acl_token.node_identity|join("' -node-identity='") }}'
+      {%- endif -%}
+    policy_id_option: >-
+      {%- if acl_token.policy_id|default([], true)|length > 0 -%}
+      -policy-id='{{ acl_token.policy_id|join("' -policy-id='") }}'
+      {%- endif -%}
+    policy_name_option: >-
+      {%- if acl_token.policy_name|default([], true)|length > 0 -%}
+      -policy-name='{{ acl_token.policy_name|join("' -policy-name='") }}'
+      {%- endif -%}
+    role_id_option: >-
+      {%- if acl_token.role_id|default([], true)|length > 0 -%}
+      -role-id='{{ acl_token.role_id|join("' -role-id='") }}'
+      {%- endif -%}
+    role_name_option: >-
+      {%- if acl_token.role_name|default([], true)|length > 0 -%}
+      -role-name='{{ acl_token.role_name|join("' -role-name='") }}'
+      {%- endif -%}
+    service_identity_option: >-
+      {%- if acl_token.service_identity|default([], true)|length > 0 -%}
+      -service-identity='{{ acl_token.service_identity|
+        join("' -service-identity='") }}'
+      {%- endif -%}
+    format_option: >-
+      {%- if acl_role.format|default(none, true) is not none -%}
+      -format='{{ acl_role.format }}'
+      {%- endif -%}
+    namespace_option: >-
+      {%- if acl_role.namespace|default(none, true) is not none -%}
+      -namespace='{{ acl_role.namespace }}'
+      {%- endif -%}
+  no_log: true
+
+- name: get existing tokens accessors
+  shell: >
+    {{ consul_bin_path }}/consul acl token list
+    -token={{ acl_master_token }}
+    -format=json
+  register: token_accessor_check
+  changed_when: false
+
+- name: save existing tokens accessors to list
+  set_fact:
+    existing_tokens_accessors: >-
+      {%- set tokens_ids = token_accessor_check.stdout|from_json|
+        json_query('[*].AccessorID') -%}
+      {{ tokens_ids is none | ternary([], tokens_ids) }}
+    existing_tokens_secrets: []
+
+- name: get existing tokens secrets
+  shell: >
+    {{ consul_bin_path }}/consul acl token read
+    -token={{ acl_master_token }}
+    -format=json
+    -id={{ item }}
+  with_items: '{{ existing_tokens_accessors }}'
+  register: token_secret_check
+  changed_when: false
+  no_log: true
+
+- name: save existing tokens secrets to list
+  set_fact:
+    existing_tokens_secrets: >
+      {{ existing_tokens_secrets + 
+        [(item.stdout|from_json).SecretID] }}
+  with_items: '{{ token_secret_check.results }}'
+  no_log: true
+
+- name: create acl token
+  shell: >
+    {{ consul_bin_path }}/consul acl token create
+    -token='{{ acl_master_token }}'
+    {{ accessor_id_option }}
+    {{ secret_id_option }}
+    {{ description_option }}
+    {{ expires_ttl_option }}
+    {{ local_option }}
+    {{ meta_option }}
+    {{ node_identity_option }}
+    {{ policy_id_option }}
+    {{ policy_name_option }}
+    {{ role_id_option }}
+    {{ role_name_option }}
+    {{ service_identity_option }}
+    {{ format_option }}
+    {{ namespace_option }}
+  register: acl_token_create_result
+  when:
+    - not (acl_token.accessor is defined and acl_token.accessor is not none and
+      acl_token.accessor in existing_tokens_accessors)
+    - not (acl_token.secret is defined and acl_token.secret is not none and
+      acl_token.secret in existing_tokens_secrets)
+
+- name: update token if already exist
+  block:
+    - name: get existing policies
+      shell: >
+        {{ consul_bin_path }}/consul acl policy list
+        -token={{ acl_master_token }} -format=json
+      register: existing_policies
+      when: (acl_token.policy_name is defined and
+              acl_token.policy_name is not none) or
+            (acl_token.policy_id is defined and
+              acl_token.policy_id is not none)
+      changed_when: false
+
+    - name: get existing roles
+      shell: >
+        {{ consul_bin_path }}/consul acl role list 
+        -token={{ acl_master_token }} -format=json
+      register: existing_roles
+      when: (acl_token.role_name is defined and
+              acl_token.role_name is not none) or
+            (acl_token.role_id is defined and
+              acl_token.role_id is not none)
+      changed_when: false
+
+    - name: get current token information
+      shell: >
+        {{ consul_bin_path }}/consul acl token read
+        -token={{ acl_master_token }} -format=json -id={{ acl_token.accessor }}
+      register: token_load_result
+      changed_when: false
+      no_log: true
+
+    - name: save current token information
+      set_fact:
+        current_token_description: >-
+          {{ token_load_result.stdout|from_json|json_query('Description') }}
+        current_token_policy_ids: >-
+          {%- set policy_ids = token_load_result.stdout|from_json|
+            json_query('Policies[*].ID') -%}
+          {{ policy_ids is none|ternary([], policy_ids) }}
+        current_token_policy_names: >-
+          {%- set policy_names = token_load_result.stdout|from_json|
+            json_query('Policies[*].Name') -%}
+          {{ policy_names is none | ternary([], policy_names) }}
+        current_token_role_ids: >-
+          {%- set role_ids = token_load_result.stdout|from_json|
+            json_query('Roles[*].ID') -%}
+          {{ role_ids is none | ternary([], role_ids) }}
+        current_token_role_names: >-
+          {%- set role_names = token_load_result.stdout|from_json|
+            json_query('Roles[*].Name') -%}
+          {{ role_names is none | ternary([], role_names) }}
+        current_token_service_identities: >-
+          {%- set svcids = [] -%}
+          {%- set sis = token_load_result.stdout|from_json|
+            json_query('ServiceIdentities') -%}
+          {%- if sis is none -%}{%- set sis = [] -%}{%- endif -%}
+          {%- for si in sis -%}
+          {%- if si.Datacenters is defined -%}
+          {{ svcids.append(si.ServiceName + ':' + si.Datacenters|join(',')) }}
+          {%- else -%}
+          {{ svcids.append(si.ServiceName) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ svcids }}
+        current_token_node_identities: >-
+          {%- set nodeids = [] -%}
+          {%- set nids = token_load_result.stdout|from_json|
+            json_query('NodeIdentities') -%}
+          {%- if nids is none -%}{%- set nids = [] -%}{%- endif -%}
+          {%- for nid in nids -%}
+          {%- if nid.Datacenter is defined -%}
+          {{ nodeids.append(nid.NodeName + ':' + nid.Datacenter) }}
+          {%- else -%}
+          {{ nodeids.append(nid.NodeName) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ nodeids }}
+        existing_policy_ids: >-
+          {%- set ids = [] + acl_token.policy_id|default([], true) -%}
+          {%- for policy in existing_policies.stdout|from_json if policy.Name in
+            acl_token.policy_name|default([], true) -%}
+          {%- if policy.ID not in ids -%}
+          {{ ids.append(policy.ID) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ ids }}
+        existing_policy_names: >-
+          {%- set names = [] + acl_token.policy_name|default([], true) -%}
+          {%- for policy in existing_policies.stdout|from_json if policy.ID in
+            acl_token.policy_id|default([], true) -%}
+          {%- if policy.Name not in names -%}
+          {{ names.append(policy.Name) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ names }}
+        existing_role_ids: >-
+          {%- set ids = [] + acl_token.role_id|default([], true) -%}
+          {%- for role in existing_roles.stdout|from_json if role.Name in
+            acl_token.role_name|default([], true) -%}
+          {%- if role.ID not in ids -%}
+          {{ ids.append(role.ID) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ ids }}
+        existing_role_names: >-
+          {%- set names = [] + acl_token.role_name|default([], true) -%}
+          {%- for role in existing_roles.stdout|from_json if role.ID in
+            acl_token.role_id|default([], true) -%}
+          {%- if role.Name not in names -%}
+          {{ names.append(role.Name) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ names }}
+      when: acl_token.policy_name is defined or
+            acl_token.policy_id is defined
+      no_log: true
+
+    - name: update acl token
+      shell: >
+        {{ consul_bin_path }}/consul acl token update
+        -token='{{ acl_master_token }}'
+        -id='{{ acl_token.accessor }}'
+        {{ description_option }}
+        {{ node_identity_option }}
+        {{ service_identity_option }}
+        {{ policy_id_option }}
+        {{ policy_name_option }}
+        {{ role_id_option }}
+        {{ role_name_option }}
+      register: update_acl_token_result
+      when: current_token_description != acl_token.description|
+              default(none, true) or
+            current_token_node_identities|symmetric_difference(
+              acl_token.node_identity|default([], true))|length != 0 or
+            current_token_service_identities|symmetric_difference(
+              acl_token.service_identity|default([], true))|length != 0 or
+            current_token_policy_ids|union(current_token_policy_names)|
+              symmetric_difference(existing_policy_ids|
+              union(existing_policy_names))|length != 0 or
+            current_token_role_ids|union(current_token_role_names)|
+              symmetric_difference(existing_role_ids|
+              union(existing_role_names))|length != 0
+  when:
+    - acl_token.accessor is defined
+    - acl_token.accessor is not none
+    - acl_token.accessor in existing_tokens_accessors

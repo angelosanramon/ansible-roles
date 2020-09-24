@@ -1,0 +1,177 @@
+- name: set acl roles command options
+  set_fact:
+    description_option: >-
+      {% if acl_role.description|default(none, true) is not none -%}
+      -description='{{ acl_role.description }}'
+      {%- endif -%}
+    meta_option: >-
+      {%- if acl_role.meta|default(false, true) == true -%}
+      -meta
+      {%- endif -%}
+    name_option: >-
+      {%- if acl_role.name|default(none, true) is not none -%}
+      -name='{{ acl_role.name }}'
+      {%- endif -%}
+    node_identity_option: >-
+      {%- if acl_role.node_identity|default([], true)|length > 0 -%}
+      -node-identity='{{ acl_role.node_identity|join("' -node-identity='") }}'
+      {%- endif -%}
+    policy_id_option: >-
+      {%- if acl_role.policy_id|default([], true)|length > 0 -%}
+      -policy-id='{{ acl_role.policy_id|join("' -policy-id='") }}'
+      {%- endif -%}
+    policy_name_option: >-
+      {%- if acl_role.policy_name|default([], true)|length > 0 -%}
+      -policy-name='{{ acl_role.policy_name|join("' -policy-name='") }}'
+      {%- endif -%}
+    service_identity_option: >-
+      {%- if acl_role.service_identity|default([], true)|length > 0 -%}
+      -service-identity='{{ acl_role.service_identity|
+        join("' -service-identity='") }}'
+      {%- endif -%}
+    format_option: >-
+      {%- if acl_role.format|default(none, true) is not none -%}
+      -format='{{ acl_role.format }}'
+      {%- endif -%}
+    namespace_option: >-
+      {%- if acl_role.namespace|default(none, true) is not none -%}
+      -namespace='{{ acl_role.namespace }}'
+      {%- endif -%}
+
+- name: get existing roles
+  shell: >
+    {{ consul_bin_path }}/consul acl role list
+    -token={{ acl_master_token }}
+    -format=json
+  register: role_check_result
+  changed_when: false
+
+- name: save existing roles to list
+  set_fact:
+    existing_roles: >-
+      {% set roles = role_check_result.stdout|from_json|
+        json_query('[*].Name') %}
+      {{ roles is none | ternary([], roles) }}
+
+- name: create acl role
+  shell: >
+    {{ consul_bin_path }}/consul acl role create
+    -token='{{ acl_master_token }}'
+    {{ name_option }}
+    {{ description_option}}
+    {{ meta_option }}
+    {{ policy_id_option }}
+    {{ policy_name_option }}
+    {{ service_identity_option }}
+    {{ node_identity_option }}
+    {{ format_option }}
+    {{ namespace_option }}
+  register: role_create_result
+  when: acl_role.name not in existing_roles
+
+- name: update policy if already exist
+  block:
+    - name: get existing policies
+      shell: >
+        {{ consul_bin_path }}/consul acl policy list
+        -token={{ acl_master_token }} -format=json
+      register: existing_policies
+      when: (acl_role.policy_name is defined and
+              acl_role.policy_name is not none) or
+            (acl_role.policy_id is defined and
+              acl_role.policy_id is not none)
+      changed_when: false
+
+    - name: get current role information
+      shell: >
+        {{ consul_bin_path }}/consul acl role read
+        -name={{ acl_role.name }}
+        -token={{ acl_master_token }}
+        -format=json
+      register: acl_role_read
+      changed_when: false
+
+    - name: save current role information
+      set_fact:
+        current_role_name: >-
+          {{ acl_role_read.stdout|from_json|json_query('Name') }}
+        current_role_id: >-
+          {{ acl_role_read.stdout|from_json|json_query('ID') }}
+        current_role_description: >-
+          {{ acl_role_read.stdout|from_json|json_query('Description') }}
+        current_role_policy_ids: >-
+          {%- set policy_ids = acl_role_read.stdout|from_json|
+            json_query('Policies[*].ID') -%}
+          {{ policy_ids is none|ternary([], policy_ids) }}
+        current_role_policy_names: >-
+          {%- set policy_names = acl_role_read.stdout|from_json|
+            json_query('Policies[*].Name') -%}
+          {{ policy_names is none | ternary([], policy_names) }}
+        current_role_service_identities: >-
+          {%- set svcids = [] -%}
+          {%- set sis = acl_role_read.stdout|from_json|
+            json_query('ServiceIdentities') -%}
+          {%- if sis is none -%}{%- set sis = [] -%}{%- endif -%}
+          {%- for si in sis -%}
+          {%- if si.Datacenters is defined -%}
+          {{ svcids.append(si.ServiceName + ':' + si.Datacenters|join(',')) }}
+          {%- else -%}
+          {{ svcids.append(si.ServiceName) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ svcids }}
+        current_role_node_identities: >-
+          {%- set nodeids = [] -%}
+          {%- set nids = acl_role_read.stdout|from_json|
+            json_query('NodeIdentities') -%}
+          {%- if nids is none -%}{%- set nids = [] -%}{%- endif -%}
+          {%- for nid in nids -%}
+          {%- if nid.Datacenter is defined -%}
+          {{ nodeids.append(nid.NodeName + ':' + nid.Datacenter) }}
+          {%- else -%}
+          {{ nodeids.append(nid.NodeName) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ nodeids }}
+        existing_policy_ids: >-
+          {%- set ids = [] + acl_role.policy_id|default([], true) -%}
+          {%- for policy in existing_policies.stdout|from_json if policy.Name in
+            acl_role.policy_name|default([], true) -%}
+          {%- if policy.ID not in ids -%}
+          {{ ids.append(policy.ID) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ ids }}
+        existing_policy_names: >-
+          {%- set names = [] + acl_role.policy_name|default([], true) -%}
+          {%- for policy in existing_policies.stdout|from_json if policy.ID in
+            acl_role.policy_id|default([], true) -%}
+          {%- if policy.Name not in names -%}
+          {{ names.append(policy.Name) }}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ names }}
+
+    - name: update acl role
+      shell: >
+        {{ consul_bin_path }}/consul acl role update
+        -token='{{ acl_master_token }}'
+        -id='{{ current_role_id }}'
+        -no-merge
+        {{ name_option }}
+        {{ description_option }}
+        {{ policy_id_option }}
+        {{ policy_name_option }}
+        {{ service_identity_option }}
+        {{ node_identity_option }}
+      register: update_acl_token_result
+      when: current_role_description != acl_role.description|
+              default(none, true) or
+            current_role_node_identities|symmetric_difference(
+              acl_role.node_identity|default([], true))|length != 0 or
+            current_role_service_identities|symmetric_difference(
+              acl_role.service_identity|default([], true))|length != 0 or
+            current_role_policy_ids|union(current_role_policy_names)|
+              symmetric_difference(existing_policy_ids|
+              union(existing_policy_names))|length != 0
+  when: acl_role.name in existing_roles

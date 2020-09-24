@@ -1,0 +1,33 @@
+{% for key, value in vault_config_options.items() %}
+{% if key in ['listener'] %}
+{% for item in value %}
+{% for item_key , item_value in item.items() %}
+{{ key }} "{{ item_key }}" {
+{% for sub_key, sub_value in item_value.items() %}
+  {{ sub_key }} = {% if sub_value is string %}"{{ sub_value }}"{% else %}{{ sub_value|lower }}{% endif %}
+
+{% endfor %}
+}
+{% endfor %}
+{% endfor %}
+{% elif key in ['seal', 'storage', 'service_registration', 'entropy'] %}
+{% for sub_key, sub_value in value.items() %}
+{{ key }} "{{ sub_key }}" {
+{% for sub_sub_key, sub_sub_value in sub_value.items() %}
+  {{ sub_sub_key }} = {% if sub_sub_value is string %}"{{ sub_sub_value }}"{% else %}{{ sub_sub_value|lower }}{% endif %}
+
+{% endfor %}
+}
+{% endfor %}
+{% elif key in ['sentinel', 'telemetry'] %}
+{{ key }} {
+{% for sub_key, sub_value in value.items() %}
+  {{ sub_key }} = {% if sub_value is string %}"{{ sub_value }}"{% else %}{{ sub_value|lower }}{% endif %}
+
+{% endfor %}
+}
+{% else %}
+{{ key }} = {% if value is string %}"{{ value }}"{% else %}{{ value|lower }}{% endif %}
+
+{% endif %}
+{% endfor %}

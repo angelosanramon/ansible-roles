@@ -1,0 +1,39 @@
+vault_zip_url: https://releases.hashicorp.com/vault/1.5.3/vault_1.5.3_linux_amd64.zip
+vault_zip_checksum: 1ec61ff4d0b7ed774ba6f71829596afd8c8bf1d72c97305f4692001cef8910b2
+vault_user: vault
+vault_group: vault
+vault_bin_path: /usr/local/bin
+vault_config_path: /etc/vault
+vault_configd_path: /etc/vault/vault.d
+vault_config_file: vault.hcl
+vault_data_path: /var/lib/vault/data
+vault_run_path: /run/vault
+vault_certs_path: '{{ vault_config_path }}/tls'
+vault_plugin_path: /var/lib/vault/plugin
+vault_auto_unseal: true
+vault_port: 8200
+vault_cluster_port: 8201
+vault_servers_group_name: vault_servers
+
+vault_config_options:
+  ui: true
+  listener:
+    - tcp:
+        address: 0.0.0.0:{{ vault_port }}
+        cluster_address: '{{ ansible_host}}:{{ vault_cluster_port }}'
+        tls_disable: true
+  storage:
+    file:
+      path: '{{ vault_data_path }}'
+  api_addr: http://{{ ansible_host}}:{{ vault_port }}
+  cluster_addr: 'https://{{ ansible_host}}:{{ vault_cluster_port }}'
+  log_level: info
+  log_format: standard
+  pid_file: '{{ vault_run_path }}/vault.pid'
+
+vault_server_cmdline_options: []
+
+vault_envs: []
+
+vault_firewall_ports:
+  - '{{ vault_port }}-{{ vault_cluster_port }}/tcp'

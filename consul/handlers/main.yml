@@ -1,0 +1,32 @@
+- name: reload consul
+  command: "pkill --pidfile '{{ consul_run_path }}/consul.pid' --signal SIGHUP"
+  listen: reload consul
+
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: reload consul
+  service:
+    name: consul
+    state: reloaded
+  listen: reload consul
+
+- name: restart consul
+  service:
+    name: consul
+    state: restarted
+  listen: restart consul
+
+- name: start consul
+  service:
+    name: consul
+    state: started
+  listen: start consul
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld

@@ -1,0 +1,30 @@
+- name: check if unseal tokens file exist
+  stat:
+    path: '{{ vault_config_path }}/.vault_unseal_tokens'
+  register: unseal_token_file
+
+- block:
+    - name: check if source unseal tokens file exist
+      stat:
+        path: '{{ vault_config_path }}/.vault_unseal_tokens'
+      register: source_unseal_token_file
+      delegate_to: '{{ src_host }}'
+
+    - name: load source unseal tokens file
+      slurp:
+        src: '{{ vault_config_path }}/.vault_unseal_tokens'
+      register: source_unseal_token_file_content
+      no_log: true
+      delegate_to: '{{ src_host }}'
+      when: source_unseal_token_file.stat.exists
+
+    - name: save unseal tokens to file
+      copy:
+        content: '{{ source_unseal_token_file_content.content | b64decode }}'
+        dest: '{{ vault_config_path }}/.vault_unseal_tokens'
+        owner: '{{ vault_user }}'
+        group: '{{ vault_group }}'
+        mode: 0640
+      when: source_unseal_token_file.stat.exists
+      no_log: true
+  when: not unseal_token_file.stat.exists

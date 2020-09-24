@@ -1,0 +1,26 @@
+- name: check if vault server is sealed
+  shell: >-
+    {{ vault_bin_path }}/vault status
+    -address=http://127.0.0.1:{{ vault_port }}
+    -tls-skip-verify | grep Sealed | awk '{print $2}'
+  register: vault_seal_check
+  changed_when: false
+
+- include_tasks: copyfrom_unseal_tokens.yml
+  with_items: >-
+    {{ groups[vault_servers_group_name]|
+      reject('search', inventory_hostname)|list }}
+  loop_control:
+    loop_var: src_host
+
+- name: unseal vault server
+  shell: |-
+    tokens=$(cat {{ vault_config_path }}/.vault_unseal_tokens | \
+    grep Key | awk -F: '{print $2}')
+    for token in $tokens
+    do
+        {{ vault_bin_path }}/vault operator unseal \
+        -address=http://127.0.0.1:{{ vault_port }} -tls-skip-verify $token
+    done
+  register: unseal_vault_result
+  when: vault_seal_check.stdout|bool
