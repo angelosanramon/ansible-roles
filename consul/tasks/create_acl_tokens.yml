@@ -1,0 +1,170 @@
+- name: get all tokens
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/tokens
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  register: get_all_tokens_result
+
+- set_fact:
+    all_tokens_accessor_ids: >-
+      {{ get_all_tokens_result.json|json_query('[*].AccessorID') }}
+    param_accessor_id: "{{ acl_token.AccessorID|default('', true) }}"
+    param_secret_id: "{{ acl_token.SecretID|default('', true) }}"
+
+- name: get all tokens secrets id
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/token/{{ accessor_id }}
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  with_items: '{{ all_tokens_accessor_ids }}'
+  loop_control:
+    loop_var: accessor_id
+  register: get_secretids_result
+  no_log: true
+
+- set_fact:
+    all_tokens: >-
+      {{ get_secretids_result.results|json_query('[*].json') }}
+    all_tokens_secret_ids: >-
+      {{ get_secretids_result.results|json_query('[*].json.SecretID') }}
+
+- name: create acl token
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/token
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_token }}'
+  register: create_acl_token_result
+  when:
+    - param_accessor_id not in all_tokens_accessor_ids
+    - param_secret_id not in all_tokens_secret_ids
+  failed_when:
+    - create_acl_token_result.status != 200
+    - '"AccessorID field is immutable" not in create_acl_token_result.content'
+    - '"SecretID is already in use" not in create_acl_token_result.content'
+
+- name: update acl token if already exists
+  block:
+    - name: get all policies
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/policies
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: get_all_policies_result
+
+    - name: get all roles
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/roles
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: get_all_roles_result
+
+    - set_fact:
+        all_policies: >-
+          {{ get_all_policies_result.json }}
+        all_roles: >-
+          {{ get_all_roles_result.json }}
+        existing_token: >-
+          {%- if param_accessor_id == '' -%}
+          {{ all_tokens|selectattr('SecretID', '==', param_secret_id)|
+            list|first }}
+          {%- else -%}
+          {{ all_tokens|selectattr('AccessorID', '==', param_accessor_id)|
+            list|first }}
+          {%- endif -%}
+        param_description: "{{ acl_token.Description|default('', true) }}"
+        param_policy_names: "{{ acl_token.Policies|json_query('[*].Name') }}"
+        param_policy_ids: "{{ acl_token.Policies|json_query('[*].ID') }}"
+        param_role_names: "{{ acl_token.Roles|json_query('[*].Name') }}"
+        param_role_ids: "{{ acl_token.Roles|json_query('[*].ID') }}"
+        param_serviceidentities: >-
+          {{ acl_token.ServiceIdentities|default([], true) }}
+        param_nodeidentities: >-
+          {{ acl_token.NodeIdentities|default([], true) }}
+        param_local: "{{ acl_token.Local|default(false, true) }}"
+        param_namespace: "{{ acl_token.Namespace|default('', true) }}"
+
+    - set_fact:
+        param_policies: >-
+          {%- set policies = [] -%}
+          {%- for policy in all_policies -%}
+          {%- if policy.Name in param_policy_names or 
+            policy.ID in param_policy_ids -%}
+          {%- set item = {'ID': policy.ID, 'Name': policy.Name} -%}
+          {%- if item not in policies -%}
+          {{ policies.append(item) }}
+          {%- endif -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ policies }}
+        param_roles: >-
+          {%- set roles = [] -%}
+          {%- for role in all_roles -%}
+          {%- if role.Name in param_role_names or role.ID in param_role_ids -%}
+          {%- set item = {'ID': role.ID, 'Name': role.Name} -%}
+          {%- if item not in roles -%}
+          {{ roles.append(item) }}
+          {%- endif -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ roles }}
+        existing_token_description: >-
+          {{ existing_token.Description }}
+        existing_token_policies: >-
+          {{ existing_token.Policies|default([], true) }}
+        existing_token_roles: >-
+          {{ existing_token.Roles|default([], true) }}
+        existing_token_serviceidentities: >-
+          {{ existing_token.ServiceIdentities|default([], true) }}
+        existing_token_nodeidentities: >-
+          {{ existing_token.NodeIdentities|default([], true) }}
+        existing_token_local: "{{ existing_token.Local|default(false, true) }}"
+        existing_token_namespace: >-
+          {{ existing_token.Namespace|default('', true) }}
+ 
+    - set_fact:
+        description_equal: >-
+          {{ param_description == existing_token_description }}
+        policies_equal: >-
+          {{ param_policies|symmetric_difference(existing_token_policies)|
+            length == 0 }}
+        roles_equal: >-
+          {{ param_roles|symmetric_difference(existing_token_roles)|
+            length == 0 }}
+        serviceidentities_equal: >-
+          {{ param_serviceidentities|symmetric_difference(
+            existing_token_serviceidentities)|length == 0 }}
+        nodeidentities_equal: >-
+          {{ param_nodeidentities|symmetric_difference(
+            existing_token_nodeidentities)|length == 0 }}
+        local_equal: '{{ param_local == existing_token_local }}'
+        namespace_equal: >-
+          {{ param_namespace == existing_token_namespace }}
+
+    - name: update acl token
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/token/{{
+            existing_token.AccessorID }}
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+        method: PUT
+        body_format: json
+        body: '{{ acl_token }}'
+      register: update_acl_token_result
+      when: not description_equal or
+            not policies_equal or
+            not roles_equal or
+            not serviceidentities_equal or
+            not nodeidentities_equal or
+            not local_equal or
+            not namespace_equal
+  when: param_accessor_id in all_tokens_accessor_ids or
+        param_secret_id in all_tokens_secret_ids

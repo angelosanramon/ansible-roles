@@ -1,0 +1,10 @@
+- name: create binding rule
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/binding-rule
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_binding_rule }}'
+  register: create_binding_rule_result

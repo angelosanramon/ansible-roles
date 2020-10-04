@@ -1,0 +1,121 @@
+- name: check if token role already exist
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/roles
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: LIST
+    follow_redirects: all
+    status_code: [200, 404]
+  register: check_token_roles
+
+- set_fact:
+    existing_token_roles: >-
+      {% if check_token_roles.json.data is defined %}
+      {{ check_token_roles.json.data.values()|list|first }}
+      {% else %}
+      []
+      {% endif %}
+
+- block:
+    - name: get existing token role information
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1//auth/token/roles/{{
+            token_role.role_name }}
+        headers:
+          X-Vault-Token: '{{ root_token }}'
+      register: get_existing_token_role_result
+
+    - set_fact:
+        existing_token_role_data: >-
+          {{ get_existing_token_role_result.json.data }}
+  when: token_role.role_name in existing_token_roles
+
+- set_fact:
+    allowed_policies_equal: >-
+      {{ existing_token_role_data.allowed_policies|default([], true)|
+        symmetric_difference(token_role.allowed_policies|default([], true))|
+        length == 0 }}
+    disallowed_policies_equal: >-
+      {{ existing_token_role_data.disallowed_policies|default([], true)|
+        symmetric_difference(token_role.disallowed_policies|default([], true))|
+        length == 0 }}
+    orphan_equal: >-
+      {{ existing_token_role_data.orphan|default(false, true) ==
+        token_role.orphan|default(false, true) }}
+    renewable_equal: >-
+      {{ existing_token_role_data.renewable|default(true, true) ==
+        token_role.renewable|default(true, true) }}
+    path_suffix_equal: >-
+      {{ existing_token_role_data.path_suffix|default('', true) ==
+      token_role.path_suffix|default('', true) }}
+    allowed_entity_aliases_equal: >-
+      {{ existing_token_role_data.allowed_entity_aliases|default([], true)|
+        symmetric_difference(token_role.allowed_entity_aliases|
+        default([], true))|length == 0 }}
+    token_explicit_max_ttl_equal: >-
+      {{ existing_token_role_data.token_explicit_max_ttl|default(0, true) ==
+        token_role.token_explicit_max_ttl|default(0, true) }}
+    token_period_equal: >-
+      {{ existing_token_role_data.token_period|default(0, true) ==
+        token_role.token_period|default(0, true) }}
+    token_type_equal: >-
+      {{ existing_token_role_data.token_type|
+        default('default-service', true) == token_role.token_type|
+        default('default-service', true) }}
+    token_bound_cidrs_equal: >-
+      {{ existing_token_role_data.token_bound_cidrs|default([], true)|
+        symmetric_difference(token_role.token_bound_cidrs|default([], true))|
+        length == 0 }}
+    token_no_default_policy_equal: >-
+      {{ existing_token_role_data.token_no_default_policy|
+        default(false, true) == token_role.token_no_default_policy|
+        default(false, 0) }}
+    token_num_uses_equal: >-
+      {{ existing_token_role_data.token_num_uses|default(0, false) ==
+        token_role.token_num_uses|default(0, false) }}
+    request_payload:
+      role_name: '{{ token_role.role_name }}'
+      allowed_policies: '{{ token_role.allowed_policies|default([], true) }}'
+      disallowed_policies: '{{ token_role.disallowed_policies|
+        default([], true) }}'
+      orphan: '{{ token_role.orphan|default(false, true) }}'
+      renewable: '{{ token_role.renewable|default(true, true) }}'
+      path_suffix: "{{ token_role.path_suffix|default('', true) }}"
+      allowed_entity_aliases: '{{ token_role.allowed_entity_aliases|
+        default([], true) }}'
+      token_bound_cidrs: '{{ token_role.token_bound_cidrs|default([], true) }}'
+      token_explicit_max_ttl: '{{ token_role.token_explicit_max_ttl|
+        default(0, true) }}'
+      token_no_default_policy: '{{ token_role.token_no_default_policy|
+        default(false, true) }}'
+      token_num_uses: '{{ token_role.token_num_uses|default(0, true) }}'
+      token_period: '{{ token_role.token_period|default(0, true) }}'
+      token_type: "{{ token_role.token_type|default('default-service') }}"
+
+- name: create/update token role
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/roles/{{
+        token_role.role_name }}
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{{ request_payload }}'
+    status_code: [200, 204]
+  register: token_role_create_result
+  when: token_role.role_name not in existing_token_roles or
+        not allowed_policies_equal or
+        not disallowed_policies_equal or
+        not orphan_equal or
+        not renewable_equal or
+        not path_suffix_equal or
+        not allowed_entity_aliases_equal or
+        not token_explicit_max_ttl_equal or
+        not token_period_equal or
+        not token_type_equal or
+        not token_bound_cidrs_equal or
+        not token_no_default_policy_equal or
+        not token_num_uses_equal

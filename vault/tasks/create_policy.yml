@@ -1,0 +1,43 @@
+- name: check if policy already exist
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/policies/acl?list=true
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+  register: check_policy_result
+
+- set_fact:
+    existing_policies: '{{ check_policy_result.json.data.values()|flatten }}'
+
+- block:
+    - name: get existing policy information
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1/sys/policies/acl/{{
+            policy.name }}
+        headers:
+          X-Vault-Token: '{{ root_token }}'
+      register: get_existing_policy_result
+
+    - set_fact:
+        existing_policy_policy: >-
+          {{ get_existing_policy_result.json.data.policy }}
+  when: policy.name in existing_policies
+
+- set_fact:
+    request_payload:
+      policy: '{{ policy.policy }}'
+
+- name: create/update policy
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/policies/acl/{{ policy.name }}
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ request_payload }}'
+    status_code: [200, 204]
+  register: create_policy_result
+  when: policy.name not in existing_policies or
+        existing_policy_policy|trim != policy.policy|trim

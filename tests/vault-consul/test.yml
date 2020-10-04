@@ -13,8 +13,6 @@
       dns_config:
         enable_truncate: true
         only_passing: true
-      ports:
-        https: 8501
       acl:
         enabled: true
         enable_token_persistence: true
@@ -32,50 +30,50 @@
       auto_encrypt:
         allow_tls: true
     consul_acl_policies:
-      - name: vault_policy
-        description: Policy for Vault access
-        rules:
-          - resource: key_prefix
-            segment: vault/
-            policy: write
-          - resource: node_prefix
-            segment: ""
-            policy: write
-          - resource: service
-            segment: vault
-            policy: write
-          - resource: agent_prefix
-            segment: ""
-            policy: write
-          - resource: session_prefix
-            segment: ""
-            policy: write
-      - name: consul_agent_policy
-        description: Policy for Consul agent node
-        rules:
-          - resource: agent_prefix
-            segment: ""
-            policy: write
-          - resource: node_prefix
-            segment: ""
-            policy: write
-          - resource: service_prefix
-            segment: ""
-            policy: read
-          - resource: session_prefix
-            segment: ""
-            policy: read
+      - Name: vault_policy
+        Description: Policy for Vault access
+        Rules: |-
+          key_prefix "vault/" {
+            policy = "write"
+          }
+          node_prefix "" {
+            policy = "write"
+          }
+          service "vault" {
+            policy = "write"
+          }
+          agent_prefix "" {
+            policy = "write"
+          }
+          session_prefix "" {
+            policy = "write"
+          }
+      - Name: consul_agent_policy
+        Description: Policy for Consul agent node
+        Rules: |-
+          agent_prefix "" {
+            policy = "write"
+          }
+          node_prefix "" {
+            policy = "write"
+          }
+          service_prefix "" {
+            policy = "read"
+          }
+          session_prefix "" {
+            policy = "read"
+          }
     consul_acl_tokens:
-      - secret: cc542a4d-3207-44a4-9d73-c0ac840439e9
-        description: Token for Vault access
-        policy_name:
-          - vault_policy
-      - secret: 87106a90-47e3-43eb-b1ca-86eec7ca1497
-        description: Token for Consul agent
-        policy_name:
-          - consul_agent_policy
+      - SecretID: cc542a4d-3207-44a4-9d73-c0ac840439e9
+        Description: Token for Vault access
+        Policies:
+          - Name: vault_policy
+      - SecretID: 87106a90-47e3-43eb-b1ca-86eec7ca1497
+        Description: Token for Consul agent
+        Policies:
+          - Name: consul_agent_policy
   roles: 
-    - consul
+    - name: consul
   post_tasks:
     - name: get consul ca certificate
       fetch:
@@ -88,54 +86,24 @@
   hosts: vault_servers
   become: yes
   vars:
-    vault_config_options:
-      ui: true
-      listener:
-        - tcp:
-            address: 0.0.0.0:{{ vault_port }}
-            cluster_address: '{{ ansible_host}}:{{ vault_cluster_port }}'
-            tls_disable: true
-      storage:
-        consul:
-          address: 192.168.1.40:8500
-          token: cc542a4d-3207-44a4-9d73-c0ac840439e9
-      api_addr: http://{{ ansible_host}}:{{ vault_port }}
-      cluster_addr: 'https://{{ ansible_host }}:{{ vault_cluster_port }}'
-      log_level: info
-      log_format: standard
-      pid_file: '{{ vault_run_path }}/vault.pid'
-    consul_config_options:
-      leave_on_terminate: true
-      rejoin_after_leave: true
-      log_level: INFO
-      log_rotate_max_files: 7
-      acl:
-        enabled: true
-        enable_token_persistence: true
-        default_policy: deny
-        tokens:
-          agent: 87106a90-47e3-43eb-b1ca-86eec7ca1497
-      auto_encrypt:
-        tls: true
-      ca_file: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
-      verify_incoming: true
-      verify_outgoing: true
-      verify_incoming_rpc: true
-      verify_server_hostname: true
-      encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
-      start_join:
-        - 192.168.1.40
-        - 192.168.1.41
-        - 192.168.1.43
-      retry_join:
-        - 192.168.1.40
-        - 192.168.1.41
-        - 192.168.1.43        
-    consul_agent_mode: client
-  roles: 
-    - consul
-    - vault
-  post_tasks:
+    consul_certs_path: /etc/consul/consul.d/tls
+    consul_user: consul
+    consul_group: consul
+    consul_domain: consul
+
+  pre_tasks:
+    - name: create consul user group
+      group:
+        name: '{{ consul_group }}'
+        state: present
+
+    - name: create consul user
+      user:
+        name: '{{ consul_user }}'
+        comment: Consul user
+        group: '{{ consul_group }}'
+        shell: /bin/false
+
     - name: create consul tls directory
       file:
         path: '{{ consul_certs_path }}'
@@ -151,4 +119,112 @@
         owner: '{{ consul_user }}'
         group: '{{ consul_group }}'
         mode: '0644'
-      notify: restart consul
+
+  roles: 
+    - name: consul
+      vars:
+        consul_config_options:
+          leave_on_terminate: true
+          rejoin_after_leave: true
+          log_level: INFO
+          log_rotate_max_files: 7
+          acl:
+            enabled: true
+            enable_token_persistence: true
+            default_policy: deny
+            tokens:
+              agent: 87106a90-47e3-43eb-b1ca-86eec7ca1497
+          auto_encrypt:
+            tls: true
+          ca_file: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+          verify_incoming: true
+          verify_outgoing: true
+          verify_incoming_rpc: true
+          verify_server_hostname: true
+          encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
+          start_join:
+            - 192.168.1.40
+            - 192.168.1.41
+            - 192.168.1.43
+          retry_join:
+            - 192.168.1.40
+            - 192.168.1.41
+            - 192.168.1.43        
+        consul_agent_mode: client
+    - name: vault
+      vars:
+        vault_auto_unseal: true
+        vault_config_options:
+          ui: true
+          listener:
+            - tcp:
+                address: 0.0.0.0:{{ vault_port }}
+                cluster_address: '{{ ansible_host}}:{{ vault_cluster_port }}'
+                tls_disable: true
+          storage:
+            consul:
+              address: 192.168.1.40:8500
+              token: cc542a4d-3207-44a4-9d73-c0ac840439e9
+          api_addr: http://{{ ansible_host}}:{{ vault_port }}
+          cluster_addr: 'https://{{ ansible_host }}:{{ vault_cluster_port }}'
+          log_level: info
+          log_format: standard
+          pid_file: '{{ vault_run_path }}/vault.pid'
+        vault_policies:
+          - name: vault_admin
+            policy: |-
+              path "sys/health"
+              {
+                capabilities = ["read", "sudo"]
+              }
+
+              path "sys/policies/acl"
+              {
+                capabilities = ["list"]
+              }
+
+              path "sys/policies/acl/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "auth/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/auth/*"
+              {
+                capabilities = ["create", "update", "delete", "sudo"]
+              }
+
+              path "sys/auth"
+              {
+                capabilities = ["read"]
+              }
+
+              path "secret/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts"
+              {
+                capabilities = ["read"]
+              }
+        vault_userpass_users:
+          - username: vault_admin
+            password: mypassword
+            token_policies:
+              - vault_admin
+
+  post_tasks:
+    - name: delete ca cert file
+      file:
+        path: /tmp/{{ consul_domain }}-agent-ca.pem
+        state: absent

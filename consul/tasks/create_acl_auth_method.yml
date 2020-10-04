@@ -1,0 +1,38 @@
+- name: get all auth methods
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/auth-methods
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  register: get_all_auth_methods_result
+
+- set_fact:
+    all_auth_methods_names: >-
+      {{ get_all_auth_methods_result.json|json_query('[*].Name') }}
+
+- name: create auth method
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/auth-method
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_auth_method }}'
+  register: create_auth_method_result
+  when: acl_auth_method.Name not in all_auth_methods_names
+  failed_when:
+    - create_auth_method_result.status != 200
+    - '"already exists" not in create_auth_method_result.content'
+
+- name: update auth method
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/auth-method/{{
+        acl_auth_method.Name }}
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_auth_method }}'
+  when: acl_auth_method.Name in all_auth_methods_names

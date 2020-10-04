@@ -1,80 +1,92 @@
 - include_tasks: preinstall.yml
 - include_tasks: install.yml
 
-- include_tasks: ca_certs.yml
+- name: generate CA certificates
+  include_tasks: ca_certs.yml
   when: consul_agent_mode == 'server'
 
-- include_tasks: server_certs.yml
+- name: generate server certificates
+  include_tasks: server_certs.yml
   when: consul_agent_mode == 'server'
 
 - meta: flush_handlers
 
+- name: wait for consul port to become open
+  wait_for:
+    port: '{{ consul_port }}'
+
+- name: wait for leader election
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/status/leader
+  register: leader_election_result
+  until: leader_election_result.json != ""
+  retries: 2
+  delay: 30
+
+- set_fact:
+    acl_consul_token: >-
+      {{ acl_master_token if consul_agent_mode == 'server' else
+        consul_config_options.acl.tokens.agent|default('', true) }}
+
+- name: create checks
+  include_tasks: create_checks.yml
+  with_items: '{{ consul_checks|default([], true) }}'
+  loop_control:
+    loop_var: check
+  when:
+    - consul_config_options.acl.enabled|default(false, true)
+
+- name: create services
+  include_tasks: create_services.yml
+  with_items: '{{ consul_services|default([], true) }}'
+  loop_control:
+    loop_var: service
+  when:
+    - consul_config_options.acl.enabled|default(false, true)
+
 - block:
-    - name: wait for consul port to become open
-      wait_for:
-        port: '{{ consul_port }}'
+    - name: create acl auth methods
+      include_tasks: create_acl_auth_method.yml
+      with_items: '{{ consul_acl_auth_methods|default([], true) }}'
+      loop_control:
+        loop_var:  acl_auth_method
 
-    - name: wait for leader election
-      shell: >-
-        {{ consul_bin_path }}/consul info
-        -token={{ acl_master_token }}
-      register: election_result
-      until: election_result.stdout.find("leader_addr") != -1
-      retries: 2
-      delay: 30
-      changed_when: false
+    - name: create acl binding rule
+      include_tasks: create_acl_binding_rule.yml
+      with_items: '{{ consul_acl_binding_rules|default([], true) }}'
+      loop_control:
+        loop_var:  acl_binding_rule
 
-    - include_tasks: acl_policies.yml
-      with_items: '{{ consul_acl_policies }}'
+    - name: create acl policies
+      include_tasks: create_acl_policy.yml
+      with_items: '{{ consul_acl_policies|default([], true) }}'
       loop_control:
         loop_var: acl_policy
-      when:
-        - consul_acl_policies|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
 
-    - include_tasks: acl_roles.yml
-      with_items: '{{ consul_acl_roles }}'
+    - name: create acl roles
+      include_tasks: create_acl_role.yml
+      with_items: '{{ consul_acl_roles|default([], true) }}'
       loop_control:
         loop_var: acl_role
-      when:
-        - consul_acl_roles|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
 
-    - include_tasks: acl_tokens.yml
-      with_items: '{{ consul_acl_tokens }}'
+    - name: create acl tokens
+      include_tasks: create_acl_tokens.yml
+      with_items: '{{ consul_acl_tokens|default([], true) }}'
       loop_control:
         loop_var: acl_token
-      when:
-        - consul_acl_tokens|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
 
-    - include_tasks: kv.yml
-      with_items: '{{ consul_kv }}'
+    - name: create sessions
+      include_tasks: create_session.yml
+      with_items: '{{ consul_sessions|default([], true) }}'
+      loop_control:
+        loop_var: session
+
+    - include_tasks: create_kv.yml
+      with_items: '{{ consul_kv|default([], true) }}'
       loop_control:
         loop_var: kv
-      when:
-        - consul_kv|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
+  when: 
+    - consul_agent_mode == 'server'
+    - consul_config_options.acl.enabled|default(false, true)
 
-    - include_tasks: checks.yml
-      with_items: '{{ consul_checks }}'
-      loop_control:
-        loop_var: check
-      when:
-        - consul_checks|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
-
-    - include_tasks: services.yml
-      with_items: '{{ consul_services }}'
-      loop_control:
-        loop_var: service
-      when:
-        - consul_services|default([], true)
-        - consul_config_options.acl.enabled|default(false, true)
-      run_once: yes
-  when: consul_agent_mode == 'server'

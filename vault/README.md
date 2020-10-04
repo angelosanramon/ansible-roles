@@ -1,5 +1,67 @@
 ### Vault
-Ansible playbook to setup a Vault cluster.
+Ansible playbook to setup a Vault cluster.  
+
+If the `vault_auto_unseal` variable is set to true, Vault will be automatically initialized and unseal. The unseal keys will be saved to a file in {{ vault_config_path }}/.vault_unseal_keys. The root token will is not saved. If the root token is needed, it can be generated using the unseal keys. See https://learn.hashicorp.com/tutorials/vault/generate-root for instructions.  
+
+To create an initial admin account for loging in to UI, set the following variables below as an example:
+
+```
+vault_policies:
+  - name: vault_admin
+    policy: |-
+      path "sys/health"
+      {
+        capabilities = ["read", "sudo"]
+      }
+
+      path "sys/policies/acl"
+      {
+        capabilities = ["list"]
+      }
+
+      path "sys/policies/acl/*"
+      {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+
+      path "auth/*"
+      {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+
+      path "sys/auth/*"
+      {
+        capabilities = ["create", "update", "delete", "sudo"]
+      }
+
+      path "sys/auth"
+      {
+        capabilities = ["read"]
+      }
+
+      path "secret/*"
+      {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+
+      path "sys/mounts/*"
+      {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+
+      path "sys/mounts"
+      {
+        capabilities = ["read"]
+      }
+
+vault_tokens:
+  - id: 3b9b0360-f21e-4236-b151-baef0e6c99dd
+    display_name: vault_admin
+    no_default_policy: true
+    no_parent: true
+    policies:
+      - vault_admin
+```
 
 ### Requirements:
 * Ansible needs to be installed on the host running this playbook. Tested on version 2.9.11.

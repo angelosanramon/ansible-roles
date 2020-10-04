@@ -1,0 +1,15 @@
+- name: create vault logrotate config file
+  copy:
+    content: |
+      {% for path in vault_logrotate_config.paths %}
+      {{ path }}
+      {% endfor %}
+      {
+      {% for option in vault_logrotate_config.options %}
+      {{ option }}
+      {% endfor %}
+      }
+    dest: /etc/logrotate.d/vault
+    owner: root
+    group: root
+    mode: 0644

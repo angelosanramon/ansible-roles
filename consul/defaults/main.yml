@@ -19,6 +19,7 @@ consul_port: 8500
 
 # Options for consul configuration file
 consul_config_options:
+  enable_script_checks: true
   enable_local_script_checks: true
   leave_on_terminate: true
   rejoin_after_leave: true
@@ -51,164 +52,155 @@ consul_commandline_options: []
 
 consul_env_vars: []
 
-consul_acl_policies: []
-  # example:
-  # consul_acl_policies:
-  #   - name: vault_policy
-  #     description: Policy for Vault access
-  #     rules:
-  #       - resource: key_prefix
-  #         segment: vault/
-  #         policy: write
-  #       - resource: node_prefix
-  #         segment: ""
-  #         policy: write
-  #       - resource: service
-  #         segment: vault
-  #         policy: write
-  #       - resource: agent_prefix
-  #         segment: ""
-  #         policy: write
-  #       - resource: session_prefix
-  #         segment: ""
-  #         policy: write
-  #     datacenters:
-  #       - dc1
-  #       - dc2
-  #   - name: node_policy
-  #     description: Policy for Consul agent node
-  #     rules:
-  #       - resource: agent_prefix
-  #         segment: ""
-  #         policy: write
-  #       - resource: node_prefix
-  #         segment: ""
-  #         policy: write
-  #       - resource: service_prefix
-  #         segment: ""
-  #         policy: read
-  #       - resource: session_prefix
-  #         segment: ""
-  #         policy: read
-
-consul_acl_roles: []
-  # example:
-  # consul_acl_roles:
-  #   - name: vault_reader
-  #     description: Vault reader role
-  #     meta: true
-  #     policy_id:
-  #       - 24766e43-dec7-dfb3-3ba8-b0b71d343e54
-  #       - a81019cb-822e-ae73-ed0d-3502403542d9
-  #     policy_name:
-  #       - node_policy
-  #       - vault_policy
-  #     service_identity:
-  #       - consul:dc1
-  #       - vault:dc2
-  #     node_identity:
-  #       - server1:dc1
-  #       - server2:dc1
-  #     format: pretty
-  #     namespace: default
-  #   - name: vault_writer
-  #     description: Vault writer role
-  #     meta: true
-  #     policy_id:
-  #       - 24766e43-dec7-dfb3-3ba8-b0b71d343e54
-  #       - a81019cb-822e-ae73-ed0d-3502403542d9
-  #     policy_name:
-  #       - node_policy
-  #       - vault_policy
-  #     service_identity:
-  #       - consul:dc1
-  #       - vault:dc2
-  #     node_identity:
-  #       - server1:dc1
-  #       - server2:dc1
-  #     format: pretty
-  #     namespace: default
-
-consul_acl_tokens: []
-  # example:
-  # consul_acl_tokens:
-  #   - accessor: 818b9ccd-7bbb-9f6e-87e2-b4039d1f584a
-  #     secret: cc542a4d-3207-44a4-9d73-c0ac840439e9
-  #     description: Token for Vault access
-  #     expires_ttl: 1h
-  #     local: true
-  #     meta: true
-  #     node_identity:
-  #       - server1:dc1
-  #       - server2:dc1
-  #     policy_id:
-  #        - 24766e43-dec7-dfb3-3ba8-b0b71d343e54
-  #        - a81019cb-822e-ae73-ed0d-3502403542d9
-  #     policy_name:
-  #       - node_policy
-  #       - vault_policy
-  #     role_id:
-  #       - 12c27e6c-1c70-ec00-70dd-8f743fbe2d5d
-  #     role_name:
-  #       - vault_reader
-  #     service_identity:
-  #       - consul:dc1
-  #       - vault:dc2
-  #     format: pretty
-  #     namespace: default
-
-consul_kv: []
-  # example:
-  # consul_kv:
-  #   - key: redis/config/connections
-  #     value: 5
-  #     acquire: true
-  #     base64: true
-  #     cas: true
-  #     flags: 42
-  #     modify_index: 123
-  #     release: true
-  #     session: abc123
-
 consul_checks: []
-  # example:
-  # consul_checks:
-  #   - id: ssh
-  #     name: SSH TCP on port 22
-  #     tcp: localhost:22
-  #     interval: 10s
-  #     timeout: 1s
+# consul_checks:
+#   - Name: SSH TCP on port 22
+#     ID: ssh
+#     TCP: localhost:22
+#     Interval: 10s
+#     Timeout: 1s
 
 consul_services: []
-  # example:
-  # consul_services:
-  #   - id: red0
-  #     name: redis
-  #     tags:
-  #       - primary
-  #     address: ''
-  #     port: 6000
-  #     checks:
-  #       - args:
-  #           - /bin/check_redis
-  #           - -p
-  #           - '6000'
-  #         interval: 5s
-  #         timeout: 20s
-  #   - id: red1
-  #     name: redis
-  #     tags:
-  #       - delayed
-  #       - secondary
-  #     address: ''
-  #     port: 7000
-  #     checks:
-  #       - args:
-  #           - /bin/check_redis
-  #           - -p
-  #           - '7000'
-  #         interval: 30s
-  #         timeout: 60s
+# consul_services:
+#   - Name: redis
+#     ID: redis1
+#     Tags:
+#       - primary
+#       - v1
+#     Address: 127.0.0.1
+#     Port: 8000
+#     Meta:
+#       redis_version: "4.0"
+#     EnableTagOverride: false
+#     Check:
+#       DeregisterCriticalServiceAfter: "90m"
+#       Args:
+#         - /usr/local/bin/check_redis.py
+#       Interval: "10s"
+#       Timeout: "5s"
+#     Weights:
+#       Passing: 10
+#       Warning: 1
+#     replace-existing-checks: true
+
+consul_acl_policies: []
+# consul_acl_policies:
+#   - Name: vault_policy
+#     Description: Policy for Vault access
+#     Rules: |-
+#       key_prefix "vault/" {
+#         policy = "write"
+#       }
+#       node_prefix "" {
+#         policy = "write"
+#       }
+#       service "vault" {
+#         policy = "write"
+#       }
+#       agent_prefix "" {
+#         policy = "write"
+#       }
+#       session_prefix "" {
+#         policy = "write"
+#       }
+#   - Name: node_policy
+#     Description: Policy for Consul agent node
+#     Rules: |-
+#       agent_prefix "" {
+#         policy = "write"
+#       }
+#       node_prefix "" {
+#         policy = "write"
+#       }
+#       service_prefix "" {
+#         policy = "read"
+#       }
+#       session_prefix "" {
+#         policy = "read"
+#       }
+
+consul_acl_auth_methods: []
+# consul_acl_auth_methods:
+#   - Name: minikube
+#     Type: kubernetes
+#     Description: dev minikube cluster
+#     Config:
+#       Host: https://192.0.2.42:8443
+#       CACert: |-
+#         -----BEGIN CERTIFICATE-----
+#         ...
+#         -----END CERTIFICATE-----
+#       ServiceAccountJWT: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+consul_acl_binding_rules: []
+# consul_acl_binding_rules:
+#   - Description: example rule
+#     AuthMethod: minikube
+#     BindType: service
+#     BindName: consul
+
+consul_acl_roles: []
+# consul_acl_roles:
+#   - Name: vault_reader
+#     Description: Vault reader role
+#     Policies:
+#       - Name: vault_policy
+#       - Name: node_policy
+#     ServiceIdentities:
+#       - ServiceName: web
+#       - ServiceName: db
+#         Datacenters:
+#           - dc1
+#     NodeIdentities:
+#       - NodeName: server1
+#         Datacenter: dc1
+#       - NodeName: server2
+#         Datacenter: dc1
+#   - Name: vault_writer
+#     Description: Vault writer role
+
+consul_acl_tokens: []
+# consul_acl_tokens:
+#   - AccessorID: 818b9ccd-7bbb-9f6e-87e2-b4039d1f584a
+#     SecretID: cc542a4d-3207-44a4-9d73-c0ac840439e9
+#     Description: Token for Vault access
+#     Policies:
+#       - Name: vault_policy
+#       - Name: node_policy
+#     Roles:
+#       - Name: vault_reader
+#       - Name: vault_writer
+#     ServiceIdentities:
+#       - ServiceName: web
+#       - ServiceName: db
+#         Datacenters:
+#           - dc1
+#     NodeIdentities:
+#       - NodeName: server1
+#         Datacenter: dc1
+#       - NodeName: server2
+#         Datacenter: dc1
+#     ExpirationTTL: 1h
+#     AuthMethod: ""
+#   - SecretID: 3d6b1138-ecbf-4e51-8312-40f84d95bff0
+
+consul_sessions: []
+# consul_sessions:
+#   - Name: my-service-lock
+#     LockDelay: 15s
+#     Behavior: release
+#     TTL": 30s
+#     dc: dc1
+
+consul_kv: []
+# consul_kv:
+#   - key: users/info
+#     dc: dc1
+#     flags: 42
+#     value: |-
+#       - firstname: first
+#         lastname: last
+#         middlename: middle
 
 # Options for creating CA certificates
 consul_tls_ca_create_options:

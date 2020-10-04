@@ -1,26 +1,57 @@
+- set_fact:
+    unseal_keys: '{{ vault_unseal_keys|default([], true) }}'
+    num_unseal_keys: '{{ vault_unseal_keys|default([], true)|length }}'
+
 - name: check if vault server is sealed
-  shell: >-
-    {{ vault_bin_path }}/vault status
-    -address=http://127.0.0.1:{{ vault_port }}
-    -tls-skip-verify | grep Sealed | awk '{print $2}'
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/seal-status
   register: vault_seal_check
-  changed_when: false
 
-- include_tasks: copyfrom_unseal_tokens.yml
-  with_items: >-
-    {{ groups[vault_servers_group_name]|
-      reject('search', inventory_hostname)|list }}
-  loop_control:
-    loop_var: src_host
+- set_fact:
+    vault_sealed: '{{ vault_seal_check.json.sealed }}'
 
-- name: unseal vault server
-  shell: |-
-    tokens=$(cat {{ vault_config_path }}/.vault_unseal_tokens | \
-    grep Key | awk -F: '{print $2}')
-    for token in $tokens
-    do
-        {{ vault_bin_path }}/vault operator unseal \
-        -address=http://127.0.0.1:{{ vault_port }} -tls-skip-verify $token
-    done
-  register: unseal_vault_result
-  when: vault_seal_check.stdout|bool
+- block:
+    - name: check if unseal keys file exist
+      stat:
+        path: '{{ vault_config_path }}/.vault_unseal_keys'
+      register: unseal_keys_file
+
+    - block:
+        - name: load unseal keys from file
+          slurp:
+            src: '{{ vault_config_path }}/.vault_unseal_keys'
+          register: source_unseal_keys_file_content
+          no_log: true
+
+        - set_fact:
+            unseal_keys: "{{ (source_unseal_keys_file_content.content|
+          b64decode).split('\n') }}"
+      when: unseal_keys_file.stat.exists
+
+    - include_tasks: copyfrom_unseal_keys.yml
+      with_items: >-
+        {{ groups[vault_servers_group_name]|
+          reject('search', inventory_hostname)|list }}
+      loop_control:
+        loop_var: src_host
+      when:
+        - not unseal_keys_file.stat.exists
+        - num_unseal_keys|int < vault_initialization_options.secret_threshold
+
+    - name: unseal vault server
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1/sys/unseal
+        method: PUT
+        body_format: json
+        body: '{ "key": "{{ item }}" }'
+      with_items: >-
+        {{ unseal_keys[:vault_initialization_options.secret_threshold] }}
+      register: unseal_vault_result
+      no_log: true
+
+    - set_fact:
+        vault_sealed: false
+      when: unseal_vault_result.results[-1].status == 200
+  when: vault_sealed

@@ -1,0 +1,24 @@
+- name: get list of enabled audit devices
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/audit
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+  register: check_audit_devices_result
+
+- set_fact:
+    enabled_audit_devices: "{{ (check_audit_devices_result.json.data).keys()|
+      list|replace('/', '') }}"
+
+- name: enable audit device
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/audit/{{ audit_device.type }}
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ audit_device }}'
+    status_code: [200, 204]
+  register: enable_audit_device_result
+  when: audit_device.type not in enabled_audit_devices

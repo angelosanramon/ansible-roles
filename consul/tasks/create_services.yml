@@ -1,0 +1,21 @@
+- set_fact:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/agent/service/register
+      {%- if 'replace-existing-checks' in service -%}
+      {{ '?replace-existing-check=' }}{{ service['replace-existing-checks'] }}
+      {%- endif -%}
+
+- name: register service
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/agent/service/register?replace-existing-checks=true
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: >-
+      {%- if 'replace-existing-checks' in service -%}
+      {%- set dummy_var = service.pop('replace-existing-checks') -%}
+      {%- endif -%}
+      {{ service }}
+  register: register_service_result

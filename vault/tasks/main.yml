@@ -1,8 +1,43 @@
 - include_tasks: preinstall.yml
-- include_tasks: install.yml
+
+- name: install vault
+  include_tasks: install.yml
+
 - meta: flush_handlers
-- include_tasks: initialize.yml
+
+- name: initialize vault
+  include_tasks: initialize.yml
   with_items: '{{ groups[vault_servers_group_name] }}'
   when: vault_auto_unseal
-- include_tasks: unseal.yml
+
+- name: unseal vault
+  include_tasks: unseal.yml
   when: vault_auto_unseal
+
+- name: check if vault is in cluster mode
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/leader
+  register: check_cluster_mode_result
+
+- name: perform after install actions
+  include_tasks: postinstall_actions.yml
+  when:
+    - vault_auto_unseal
+    - not vault_sealed
+    - check_cluster_mode_result.json.ha_enabled
+  run_once: yes
+
+- name: perform after install actions
+  include_tasks: postinstall_actions.yml
+  when:
+    - vault_auto_unseal
+    - not vault_sealed
+    - not check_cluster_mode_result.json.ha_enabled
+
+- name: turn off swapping
+  include_tasks: swaps.yml
+  when: vault_swap_off
+
+- name: enable logrotate
+  include_tasks: logrotate.yml

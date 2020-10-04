@@ -1,0 +1,67 @@
+- name: generate new root token
+  include_tasks: generate_root_token.yml
+
+- name: enable secret backends
+  include_tasks: enable_secret_backend.yml
+  with_items: '{{ vault_secret_backends }}'
+  loop_control:
+    loop_var: secret_backend
+
+- name: enable auth methods
+  include_tasks: enable_auth_method.yml
+  with_items: '{{ vault_auth_methods }}'
+  loop_control:
+    loop_var: auth_method
+
+- name: enable audit devices
+  include_tasks: enable_audit_device.yml
+  with_items: '{{ vault_audit_devices }}'
+  loop_control:
+    loop_var: audit_device
+
+- name: create vault policies
+  include_tasks: create_policy.yml
+  with_items: '{{ vault_policies }}'
+  loop_control:
+    loop_var: policy
+
+- name: create token roles
+  include_tasks: create_token_role.yml
+  with_items: '{{ vault_token_roles }}'
+  loop_control:
+    loop_var: token_role
+
+- name: create tokens
+  include_tasks: create_token.yml
+  with_items: '{{ vault_tokens }}'
+  loop_control:
+    loop_var: token
+
+- name: create userpass users
+  include_tasks: create_userpass_user.yml
+  with_items: '{{ vault_userpass_users }}'
+  loop_control:
+    loop_var: userpass_user
+
+- name: revoke initial root token
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/revoke
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{ "token": "{{ init_root_token }}" }'
+    status_code: [200, 204]
+  when: init_root_token is defined
+
+- name: revoke generated root token
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/revoke
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{ "token": "{{ root_token }}" }'
+    status_code: [200, 204]

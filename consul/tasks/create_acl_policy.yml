@@ -1,0 +1,84 @@
+- name: get all policies
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/policies
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  register: get_all_policy_result
+
+- set_fact:
+    all_policies_names: >-
+      {{ get_all_policy_result.json|json_query('[*].Name') }}
+
+- name: create acl policy
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/policy
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_policy }}'
+  register: create_policy_result
+  when: acl_policy.Name not in all_policies_names
+  failed_when:
+    - create_policy_result.status != 200
+    - '"already exists" not in create_policy_result.content'
+
+- name: update policy if already exists
+  block:
+    - name: get acl policy
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/policy/name/{{
+            acl_policy.Name }}
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: get_policy_result
+
+    - set_fact:
+        existing_policy: '{{ get_policy_result.json }}'
+        param_description: "{{ acl_policy.Description|default('', true) }}"
+        param_rules: >-
+          {{ acl_policy.Rules|default('', true)|
+            regex_replace('\\s+', ' ')|trim }}
+        param_datacenters: >-
+          {{ acl_policy.Datacenters|default([], true) }}
+        param_namespace: "{{ acl_policy.Namespace|default('', true) }}"
+
+    - set_fact:
+        existing_policy_description: >-
+          {{ existing_policy.Description|default('', true) }}
+        existing_policy_rules: >-
+          {{ existing_policy.Rules|default('', true)|
+            regex_replace('\\s+', ' ')|trim }}
+        existing_policy_datacenters: >-
+          {{ existing_policy.Datacenters|default([], true) }}
+        existing_policy_namespace: >-
+          {{ existing_policy.Namespace|default('', true) }}
+
+    - set_fact:
+        description_equal: >-
+          {{ param_description == existing_policy_description }}
+        rules_equal: >-
+          {{ param_rules == existing_policy_rules }}
+        datacenters_equal: >-
+          {{ param_datacenters|symmetric_difference(
+            existing_policy_datacenters)|length == 0 }}
+        namespace_equal: '{{ param_namespace == existing_policy_namespace }}'
+
+    - name: update acl policy
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/policy/{{
+            existing_policy.ID }}
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+        method: PUT
+        body_format: json
+        body: '{{ acl_policy }}'
+      when: not description_equal or
+            not rules_equal or
+            not datacenters_equal or
+            not namespace_equal
+  when: acl_policy.Name in all_policies_names

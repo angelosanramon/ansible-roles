@@ -1,0 +1,63 @@
+- block:
+    - name: check if unseal keys file exist
+      stat:
+        path: '{{ vault_config_path }}/.vault_unseal_keys'
+      register: check_unseal_keys_file
+
+    - name: load unseal keys file
+      slurp:
+        src: '{{ vault_config_path }}/.vault_unseal_keys'
+      register: unseal_keys_file
+      when: check_unseal_keys_file.stat.exists
+      no_log: true
+
+    - set_fact:
+        unseal_keys: "{{ (unseal_keys_file.content|b64decode).split('\n') }}"
+      when: check_unseal_keys_file.stat.exists
+
+    - include_tasks: copyfrom_unseal_keys.yml
+      with_items: >-
+        {{ groups[vault_servers_group_name]|
+          reject('search', inventory_hostname)|list }}
+      loop_control:
+        loop_var: src_host
+      when: not check_unseal_keys_file.stat.exists
+  when: num_unseal_keys|int < vault_initialization_options.secret_threshold
+
+- name: initiate root token generation
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/generate-root/attempt
+    method: PUT
+  register: root_token_initiation_result
+
+- set_fact:
+    unseal_threshold: '{{ vault_initialization_options.secret_threshold }}'
+    otp: '{{ root_token_initiation_result.json.otp }}'
+    nonce: '{{ root_token_initiation_result.json.nonce }}'
+
+- name: generate root token
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/generate-root/update
+    method: PUT
+    body_format: json
+    body: '{ "key": "{{ item }}", "nonce": "{{ nonce }}" }'
+  with_items: '{{ unseal_keys[:unseal_threshold|int] }}'
+  register: generate_root_token_result
+  no_log: true
+
+- set_fact:
+    encoded_token: >-
+      {{ generate_root_token_result.results[-1].json.encoded_root_token }}
+
+- name: decode root token
+  shell: >-
+    {{ vault_bin_path }}/vault operator generate-root
+    -decode='{{ encoded_token }}' -otp='{{ otp }}'
+    -address=http://127.0.0.1:{{ vault_port }}
+  register: decode_root_token_result
+  changed_when: false
+
+- set_fact:
+    root_token: '{{ decode_root_token_result.stdout }}'

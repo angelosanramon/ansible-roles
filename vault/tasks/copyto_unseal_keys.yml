@@ -1,0 +1,16 @@
+- name: check unseal keys file exist
+  stat:
+    path: '{{ vault_config_path }}/.vault_unseal_keys'
+  register: unseal_keys_file
+  delegate_to: '{{ dest_host }}'
+
+- name: save unseal keys to file
+  copy:
+    content: "{{ unseal_keys|join('\n') }}"
+    dest: '{{ vault_config_path }}/.vault_unseal_keys'
+    owner: '{{ vault_user }}'
+    group: '{{ vault_group }}'
+    mode: 0600
+  when: not unseal_keys_file.stat.exists
+  no_log: true
+  delegate_to: '{{ dest_host }}'

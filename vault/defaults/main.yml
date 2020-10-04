@@ -10,11 +10,16 @@ vault_data_path: /var/lib/vault/data
 vault_run_path: /run/vault
 vault_certs_path: '{{ vault_config_path }}/tls'
 vault_plugin_path: /var/lib/vault/plugin
+vault_log_path: /var/log/vault
 vault_auto_unseal: true
 vault_port: 8200
 vault_cluster_port: 8201
 vault_servers_group_name: vault_servers
+vault_swap_off: false
+vault_envs: []
 
+# Map of Vault config options that will be applied to the Vault config file.
+# See https://www.vaultproject.io/docs/configuration for more info
 vault_config_options:
   ui: true
   listener:
@@ -31,9 +36,155 @@ vault_config_options:
   log_format: standard
   pid_file: '{{ vault_run_path }}/vault.pid'
 
+# List of command line options for Vault.
+# See https://www.vaultproject.io/docs/commands for more info
 vault_server_cmdline_options: []
 
-vault_envs: []
+# List of unseal keys to use for unsealing and generating root token. These
+# keys will be automatically generated when Vault is initialized.
+vault_unseal_keys: []
+# example:
+#   vault_unseal_keys:
+#   - JJhLKJDcYoBI6OlS+vSa3wNl7xIxXzDWx9Zrxo7nfdM6
+#   - cjP9QLMavMwf/YydKlIcSfFgXolaHDjQxr8KiY5CPfWs
+#   - ugWLab8XCxGm8LjBF9JyW3sy72CauzDoF2/zMHcLn1bn
+#   - VdR0BDfA1otgwjgNf3XhRmJfVybf/0dzMWHHpfqHnx14
+#   - 0Z3naXqlU/QSkmZxMXkdL5QXz+biWsh9XAFUfb1S6KbN
+
+# Options when vault init is executed
+# See https://www.vaultproject.io/api-docs/system/init for more info
+vault_initialization_options:
+  secret_shares: 5
+  secret_threshold: 3
+
+# List of Auth methods to enable
+# See https://www.vaultproject.io/api-docs/system/auth for more info
+vault_auth_methods: []
+# example:
+# vault_auth_methods:
+#   - type: userpass
+#     description: Enable userpass authentication method
+
+# List of Secret backends to enable
+# See https://www.vaultproject.io/api-docs/system/mounts for more info
+vault_secret_backends: []
+  # example:
+  # vault_secret_backends:
+  # - type: kv
+  #   description: Enable KV secret engine
+  #   config:
+  #     listing_visibility: unauth
+  #   options:
+  #     version: 1
+
+# List of audit devices that will be enabled.
+# See https://www.vaultproject.io/api-docs/system/audit for more info
+vault_audit_devices: []
+# example:
+# vault_audit_devices:
+#   - type: file
+#     options:
+#       file_path: '{{ vault_log_path }}/vault_audit.log'
+
+# List of policies that will be created.
+# See https://www.vaultproject.io/api-docs/system/policy for more info
+vault_policies: []
+# example:
+# vault_policies:
+#   - name: vault_admin
+#     policy: |-
+#       path "sys/health"
+#       {
+#         capabilities = ["read", "sudo"]
+#       }
+
+#       path "sys/policies/acl"
+#       {
+#         capabilities = ["list"]
+#       }
+
+#       path "sys/policies/acl/*"
+#       {
+#         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+#       }
+
+#       path "auth/*"
+#       {
+#         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+#       }
+
+#       path "sys/auth/*"
+#       {
+#         capabilities = ["create", "update", "delete", "sudo"]
+#       }
+
+#       path "sys/auth"
+#       {
+#         capabilities = ["read"]
+#       }
+
+#       path "secret/*"
+#       {
+#         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+#       }
+
+#       path "sys/mounts/*"
+#       {
+#         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+#       }
+
+#       path "sys/mounts"
+#       {
+#         capabilities = ["read"]
+#       }
+
+# List of token roles that will be created.
+# See https://www.vaultproject.io/api-docs/auth/token for more info
+vault_token_roles: []
+# example:
+# vault_token_roles:
+#   - role_name: admin_token_role
+#     allowed_policies:
+#       - vault_admin
+#     allowed_entity_aliases:
+#       - my-entity-alias
+
+# List of tokens that will be created.
+# See https://www.vaultproject.io/api-docs/auth/token for more info
+vault_tokens: []
+# example:
+# vault_tokens:
+#   - id: 3b9b0360-f21e-4236-b151-baef0e6c99dd
+#     display_name: vault_admin
+#     no_default_policy: true
+#     no_parent: true
+#     policies:
+#       - vault_admin
+
+# List of userpass users that will be created.
+# See https://www.vaultproject.io/api-docs/auth/userpass for more info
+vault_userpass_users: []
+# example:
+# vault_userpass_users:
+#   - username: vault_admin
+#     password: mypassword
+#     token_policies:
+#       - vault_admin
 
 vault_firewall_ports:
   - '{{ vault_port }}-{{ vault_cluster_port }}/tcp'
+
+# Enable logrotate on all .log files under /var/log/vault directory
+vault_logrotate_config:
+  paths:
+    - /var/log/vault/*.log
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload vault
+      endscript

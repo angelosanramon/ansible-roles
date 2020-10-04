@@ -1,0 +1,30 @@
+- name: get all sessions
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/session/list
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  register: get_all_sessions_result
+
+- set_fact:
+    all_session_names: >-
+      {{ get_all_sessions_result.json|json_query('[*].Name') }}
+
+- set_fact:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/session/create
+      {%- if 'dc' in session or 'ns' in session -%}{{ '?' }}{%- endif -%}
+      {%- for k,v in session.items() if k == 'dc' or k == 'ns' -%}
+      {{ k }}={{ v }}{{ '&' if not loop.last else '' }}
+      {%- endfor -%}
+
+- name: create session
+  uri:
+    url: '{{ url }}'
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ session }}'
+  register: create_session_result
+  when: session.Name|default('', true) not in all_session_names

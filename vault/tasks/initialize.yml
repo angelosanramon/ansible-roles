@@ -1,49 +1,44 @@
 - name: check if vault is already initialized
-  shell: >-
-    {{ vault_bin_path }}/vault status
-    -address=http://127.0.0.1:{{ vault_port }}
-    -tls-skip-verify | grep Initialized | awk '{print $2}'
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/init
   register: vault_initialize_check
-  changed_when: false
   delegate_to: '{{ item }}'
   run_once: yes
 
-- name: initialize temporary facts
-  set_fact:
-    vault_initialized: '{{ vault_initialize_check.stdout|bool }}'
+- set_fact:
+    vault_initialized: '{{ vault_initialize_check.json.initialized }}'
   delegate_to: '{{ item }}'
   run_once: yes
 
 - block:
     - name: initialize vault
-      shell: >-
-        {{ vault_bin_path }}/vault operator init
-        -address=http://127.0.0.1:{{ vault_port }}
-        -tls-skip-verify
-      register: vault_initialized_result
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1/sys/init
+        method: PUT
+        body_format: json
+        body: '{{ vault_initialization_options }}'
+      register: vault_initialize_result
       no_log: true
 
-    - name: set unseal keys and root token facts
-      set_fact:
-        unseal_key_1: '{{ vault_initialized_result.stdout_lines[0] }}'
-        unseal_key_2: '{{ vault_initialized_result.stdout_lines[1] }}'
-        unseal_key_3: '{{ vault_initialized_result.stdout_lines[2] }}'
-        unseal_key_4: '{{ vault_initialized_result.stdout_lines[3] }}'
-        unseal_key_5: '{{ vault_initialized_result.stdout_lines[4] }}'
-        root_token: '{{ vault_initialized_result.stdout_lines[6] }}'
-      no_log: true
+    - set_fact:
+        unseal_keys: '{{ vault_initialize_result.json.values()|list|first }}'
+        init_root_token: '{{ vault_initialize_result.json.values()|list|last }}'
 
-    - name: save unseal tokens to file
+    - name: save unseal keys to file
       copy:
-        content: "{{ [unseal_key_1, unseal_key_2, unseal_key_3, unseal_key_4, unseal_key_5, root_token] | join('\n') }}"
-        dest: '{{ vault_config_path }}/.vault_unseal_tokens'
+        content: "{{ unseal_keys|join('\n') }}"
+        dest: '{{ vault_config_path }}/.vault_unseal_keys'
         owner: '{{ vault_user }}'
         group: '{{ vault_group }}'
         mode: 0640
       no_log: true
 
-    - include_tasks: tasks/copyto_unseal_tokens.yml
-      with_items: "{{ groups[vault_servers_group_name] | reject('search', inventory_hostname) | list }}"
+    - include_tasks: copyto_unseal_keys.yml
+      with_items: >-
+        {{ groups[vault_servers_group_name]|
+          reject('search', inventory_hostname)|list }}
       loop_control:
         loop_var: dest_host
   when: not vault_initialized

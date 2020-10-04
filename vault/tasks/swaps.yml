@@ -1,0 +1,20 @@
+- name: get swaps info
+  shell: >-
+    cat /proc/swaps | grep -v Filename | awk '{print $1}'
+  register: get_swap_result
+  changed_when: false
+
+- name: turn off swaps
+  shell: >-
+    swapoff -a
+  register: turn_off_swap_result
+  when: get_swap_result.stdout_lines|length > 0
+
+- name: permanently remove swaps
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^({{ item }}.*)$'
+    line: '# \1'
+    backrefs: yes
+  with_items: '{{ get_swap_result.stdout_lines }}'
+  when: get_swap_result.stdout_lines|length > 0

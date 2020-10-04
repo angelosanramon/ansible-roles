@@ -1,0 +1,31 @@
+- name: check if token already exist
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/lookup
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{ "token": "{{ token.id }}" }'
+    status_code: [200, 403]
+  register: check_token_result
+
+- set_fact:
+    token_exists: >-
+      {%- if check_token_result.status == 200 -%}
+      true
+      {%- else -%}
+      false
+      {%- endif -%}
+
+- name: create token
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/token/create
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{{ token }}'
+  register: token_create_result
+  when: not token_exists

@@ -1,0 +1,29 @@
+- block:
+    - name: check if source unseal keys file exist
+      stat:
+        path: '{{ vault_config_path }}/.vault_unseal_keys'
+      register: source_unseal_keys_file
+      delegate_to: '{{ src_host }}'
+
+    - name: load source unseal keys file
+      slurp:
+        src: '{{ vault_config_path }}/.vault_unseal_keys'
+      register: source_unseal_keys_file_content
+      no_log: true
+      delegate_to: '{{ src_host }}'
+      when: source_unseal_keys_file.stat.exists
+
+    - set_fact:
+        unseal_keys: "{{ (source_unseal_keys_file_content.content|
+          b64decode).split('\n') }}"
+
+    - name: save unseal tokens to file
+      copy:
+        content: "{{ unseal_keys|join('\n') }}"
+        dest: '{{ vault_config_path }}/.vault_unseal_keys'
+        owner: '{{ vault_user }}'
+        group: '{{ vault_group }}'
+        mode: 0600
+      when: source_unseal_keys_file.stat.exists
+      no_log: true
+  when: not unseal_keys_file.stat.exists

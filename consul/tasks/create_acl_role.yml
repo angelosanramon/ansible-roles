@@ -1,0 +1,113 @@
+- name: get all roles
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/roles
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+  register: get_all_roles_result
+
+- set_fact:
+    all_roles_names: "{{ get_all_roles_result.json|json_query('[*].Name') }}"
+
+- name: create acl role
+  uri:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/acl/role
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body_format: json
+    body: '{{ acl_role }}'
+  register: create_acl_role_result
+  when: acl_role.Name not in all_roles_names
+  failed_when:
+    - create_acl_role_result.status != 200
+    - '"already exists" not in create_acl_role_result.content'
+
+- name: update role if already exists
+  block:
+    - name: get all policies
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/policies
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: all_policies_result
+
+    - name: get acl role
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/role/name/{{
+            acl_role.Name }}
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: get_role_result
+
+    - set_fact:
+        all_policies: '{{ all_policies_result.json }}'
+        existing_role: '{{ get_role_result.json }}'
+        param_description: "{{ acl_role.Description|default('', true) }}"
+        param_policy_names: "{{ acl_role.Policies|json_query('[*].Name') }}"
+        param_policy_ids: "{{ acl_role.Policies|json_query('[*].ID') }}"
+        param_serviceidentities: >-
+          {{ acl_role.ServiceIdentities|default([], true) }}
+        param_nodeidentities: >-
+          {{ acl_role.NodeIdentities|default([], true) }}
+        param_namespace: "{{ acl_role.Namespace|default('', true) }}"
+
+    - set_fact:
+        param_policies: >-
+          {%- set policies = [] -%}
+          {%- for policy in all_policies -%}
+          {%- if policy.Name in param_policy_names or 
+            policy.ID in param_policy_ids -%}
+          {%- set item = {'ID': policy.ID, 'Name': policy.Name} -%}
+          {%- if item not in policies -%}
+          {{ policies.append(item) }}
+          {%- endif -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ policies }}
+        existing_role_description: >-
+          {{ existing_role.Description|default('', true) }}
+        existing_role_policies: >-
+          {{ existing_role.Policies|default([], true) }}
+        existing_role_serviceidentities: >-
+          {{ existing_role.ServiceIdentities|default([], true) }}
+        existing_role_nodeidentities: >-
+          {{ existing_role.NodeIdentities|default([], true) }}
+        existing_role_namespace: >-
+          {{ existing_role.Namespace|default('', true) }}
+
+    - set_fact:
+        description_equal: >-
+          {{ param_description == existing_role_description }}
+        policies_equal: >-
+          {{ param_policies|symmetric_difference(existing_role_policies)|
+            length == 0 }}
+        serviceidentities_equal: >-
+          {{ param_serviceidentities|symmetric_difference(
+            existing_role_serviceidentities)|length == 0 }}
+        nodeidentities_equal: >-
+          {{ param_nodeidentities|symmetric_difference(
+            existing_role_nodeidentities)|length == 0 }}
+        namespace_equal: >-
+          {{ param_namespace == existing_role_namespace }}
+
+    - name: update acl role
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/acl/role/{{ 
+            existing_role.ID }}
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+        method: PUT
+        body_format: json
+        body: '{{ acl_role }}'
+      register: update_acl_role_result
+      when: not description_equal or
+            not policies_equal or
+            not serviceidentities_equal or
+            not nodeidentities_equal or
+            not namespace_equal
+  when: acl_role.Name in all_roles_names

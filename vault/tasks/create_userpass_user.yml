@@ -1,0 +1,143 @@
+- name: check if userpass is enabled
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/auth
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+  register: userpass_exist_check
+
+- set_fact:
+    enabled_auths: "{{ (userpass_exist_check.json.data).keys()|list|
+      replace('/', '') }}"
+
+- name: enable userpass
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/auth/userpass
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{"type": "userpass"}'
+    status_code: [200, 204]
+  register: userpass_enable
+  when: "'userpass' not in enabled_auths"
+
+- name: check if user already exist
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/userpass/users
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: LIST
+    status_code: [200, 404]
+  register: user_check_result
+
+- set_fact:
+    vault_users: >-
+      {% if user_check_result.json.data is defined %}
+      {{ (user_check_result.json.data.values()|list)[0] }}
+      {% else %}
+      []
+      {% endif %}
+
+- block:
+    - name: get existing userpass user information
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1/auth/userpass/users/{{
+            userpass_user.username }}
+        headers:
+          X-Vault-Token: '{{ root_token }}'
+      register: existing_user_info
+
+    - set_fact:
+        existing_user_data: >-
+          {{ existing_user_info.json.data }}
+  when: userpass_user.username in vault_users
+
+- name: check if password is valid
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/userpass/login/{{
+        userpass_user.username }}
+    method: POST
+    body_format: json
+    body: '{"password": "{{ userpass_user.password }}"}'
+    return_content: yes
+    status_code: [200, 400]
+  register: password_valid_check
+
+- set_fact:
+    username_equal: >-
+      {{ userpass_user.username in vault_users }}
+    password_equal: >-
+      {{ password_valid_check.status == 200 }}
+    token_bound_cidrs_equal: >-
+      {{ existing_user_data.token_bound_cidrs|default([], true)|
+        symmetric_difference(userpass_user.token_bound_cidrs|
+        default([], true))|length == 0 }}
+    token_explicit_max_ttl_equal: >-
+      {{ existing_user_data.token_explicit_max_ttl|default(0, true) == 
+        userpass_user.token_explicit_max_ttl|default(0, true) }}
+    token_max_ttl_equal: >-
+      {{ existing_user_data.token_max_ttl|default(0, true) ==
+        userpass_user.token_max_ttl|default(0, true) }}
+    token_no_default_policy_equal: >-
+      {{ existing_user_data.token_no_default_policy|default(false, true) ==
+        userpass_user.token_no_default_policy|default(false, true) }}
+    token_num_uses_equal: >-
+      {{ existing_user_data.token_num_uses|default(0, true) ==
+        userpass_user.token_num_uses|default(0, true) }}
+    token_period_equal: >-
+      {{ existing_user_data.token_period|default(0, true) ==
+        userpass_user.token_period|default(0, true) }}
+    token_policies_equal: >-
+      {{ existing_user_data.token_policies|default([], true)|
+        symmetric_difference(userpass_user.token_policies|
+        default([], true))|length == 0 }}
+    token_ttl_equal: >-
+      {{ existing_user_data.token_ttl|default(0, true) ==
+        userpass_user.token_ttl|default(0, true) }}
+    token_type_equal: >-
+      {{ existing_user_data.token_type|default('default', true) ==
+        userpass_user.token_type|default('default', true) }}
+    request_payload:
+      username: '{{ userpass_user.username }}'
+      password: '{{ userpass_user.password }}'
+      token_ttl: '{{ userpass_user.token_ttl|default(0, true) }}'
+      token_max_ttl: '{{ userpass_user.token_max_ttl|default(0, true) }}'
+      token_policies: '{{ userpass_user.token_policies|default([], true) }}'
+      token_bound_cidrs: >-
+        {{ userpass_user.token_bound_cidrs|default([], true) }}
+      token_explicit_max_ttl: >-
+        {{ userpass_user.token_explicit_max_ttl|default(0, true) }}
+      token_no_default_policy: >-
+        {{ userpass_user.token_no_default_policy|default(false, true) }}
+      token_num_uses: '{{ userpass_user.token_num_uses|default(0, true) }}'
+      token_period: '{{ userpass_user.token_period|default(0, true) }}'
+      token_type: "{{ userpass_user.token_type|default('default', true) }}"
+
+- name: create/update userpass user
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/auth/userpass/users/{{
+        userpass_user.username }}
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{{ request_payload }}'
+    status_code: [200, 204]
+  register: userpass_user_create
+  when: not username_equal or
+        not password_equal or
+        not token_bound_cidrs_equal or
+        not token_explicit_max_ttl_equal or
+        not token_max_ttl_equal or
+        not token_no_default_policy_equal or
+        not token_num_uses_equal or
+        not token_period_equal or
+        not token_policies_equal or
+        not token_ttl_equal or
+        not token_type_equal

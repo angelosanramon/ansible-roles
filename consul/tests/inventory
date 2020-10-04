@@ -1,4 +1,4 @@
 [consul_servers]
-server1.cluster.local   ansible_host=192.168.1.20
-server2.cluster.local   ansible_host=192.168.1.21
-server3.cluster.local   ansible_host=192.168.1.22
+consul1.cluster.local   ansible_host=192.168.1.20
+consul2.cluster.local   ansible_host=192.168.1.21
+consul3.cluster.local   ansible_host=192.168.1.22

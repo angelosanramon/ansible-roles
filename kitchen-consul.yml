@@ -12,28 +12,28 @@ platforms:
   - name: centos/8
 
 suites:
-  - name: server1
+  - name: consul1
     provisioner:
       command: >
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
-      vm_hostname: server1.cluster.local
+      vm_hostname: consul1.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.20"}]
-  - name: server2
+  - name: consul2
     provisioner:
       command: >
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
-      vm_hostname: server2.cluster.local
+      vm_hostname: consul2.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.21"}]
-  - name: server3
+  - name: consul3
     provisioner:
       command: >
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
-      vm_hostname: server3.cluster.local
+      vm_hostname: consul3.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.22"}]
   - name: ansible

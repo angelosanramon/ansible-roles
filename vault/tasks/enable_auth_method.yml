@@ -1,0 +1,116 @@
+- name: get list of enabled auth methods
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/auth
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+  register: check_auth_method_result
+
+- set_fact:
+    enabled_auths_methods: "{{ (check_auth_method_result.json.data).keys()|list|
+      replace('/', '') }}"
+
+- set_fact:
+    existing_auth_method_configs: >-
+      {{ check_auth_method_result.json[auth_method.type + '/'] }}
+  when: auth_method.type in enabled_auths_methods
+
+- name: enable auth method
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/auth/{{ auth_method.type }}
+    headers:
+      X-Vault-Token: '{{ root_token }}'
+    method: POST
+    body_format: json
+    body: '{{ auth_method }}'
+    status_code: [200, 204]
+  register: enable_auth_method_result
+  when: auth_method.type not in enabled_auths_methods
+
+- block:
+    - set_fact:
+        description_equal: >-
+          {{ existing_auth_method_configs.description|default('', true) ==
+            auth_method.description|default('', true) }}
+        default_lease_ttl_equal: >-
+          {{ existing_auth_method_configs.config.default_lease_ttl|
+            default(0, true) == auth_method.config.default_lease_ttl|
+            default(0, true) }}
+        max_lease_ttl_equal: >-
+          {{ existing_auth_method_configs.config.max_lease_ttl|
+            default(0, true)== auth_method.config.max_lease_ttl|
+            default(0, true) }}
+        audit_non_hmac_request_keys_equal: >-
+          {{ existing_auth_method_configs.config.audit_non_hmac_request_keys|
+            default([], true)|symmetric_difference(
+            auth_method.config.audit_non_hmac_request_keys|default([], true))|
+            length == 0 }}
+        audit_non_hmac_response_keys_equal: >-
+          {{ existing_auth_method_configs.config.audit_non_hmac_response_keys|
+            default([], true)|symmetric_difference(
+            auth_method.config.audit_non_hmac_response_keys|default([], true))|
+            length == 0 }}
+        listing_visibility_equal: >-
+          {{ existing_auth_method_configs.config.listing_visibility|
+            default('', true) == auth_method.config.listing_visibility|
+            default('', true) }}
+        passthrough_request_headers_equal: >-
+          {{ existing_auth_method_configs.config.passthrough_request_headers|
+            default([], true)|symmetric_difference(
+            auth_method.config.passthrough_request_headers|default([], true))|
+            length == 0 }}
+        allowed_response_headers_equal: >-
+          {{ existing_auth_method_configs.config.allowed_response_headers|
+            default([], true)|symmetric_difference(
+            auth_method.config.allowed_response_headers|default([], true))|
+            length == 0 }}
+        token_type_equal: >-
+          {{ existing_auth_method_configs.config.token_type|
+            default('default-service', true) == auth_method.config.token_type|
+            default('default-service', true) }}
+        request_payload:
+          description: '{{ auth_method.description }}'
+          default_lease_ttl: >-
+           {{ auth_method.config.default_lease_ttl|default(0, true) }}
+          max_lease_ttl: >-
+            {{ auth_method.config.max_lease_ttl|default(0, true) }}
+          audit_non_hmac_request_keys: >-
+            {{ auth_method.config.audit_non_hmac_request_keys|
+              default([], true) }}
+          audit_non_hmac_response_keys: >-
+            {{ auth_method.config.audit_non_hmac_response_keys|
+              default([], true) }}
+          listing_visibility: >-
+            {{ auth_method.config.listing_visibility|default('', true) }}
+          passthrough_request_headers: >-
+            {{ auth_method.config.passthrough_request_headers|
+              default([], true) }}
+          allowed_response_headers: >-
+            {{ auth_method.config.allowed_response_headers|
+              default([], true) }}
+          token_type: >-
+            {{ auth_method.config.token_type|default('default-service', true) }}
+
+    - name: tune auth method
+      uri:
+        url: >-
+          http://127.0.0.1:{{ vault_port }}/v1/sys/auth/{{
+            auth_method.type }}/tune
+        headers:
+          X-Vault-Token: '{{ root_token }}'
+        method: POST
+        body_format: json
+        body: '{{ request_payload }}'
+        status_code: [200, 204]
+      register: tune_auth_method_result
+      when: not description_equal or
+            not default_lease_ttl_equal or
+            not max_lease_ttl_equal or
+            not audit_non_hmac_request_keys_equal or
+            not audit_non_hmac_response_keys_equal or
+            not listing_visibility_equal or
+            not passthrough_request_headers_equal or
+            not allowed_response_headers_equal or
+            not token_type_equal
+  when: auth_method.type in enabled_auths_methods

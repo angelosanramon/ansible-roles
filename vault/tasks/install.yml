@@ -10,38 +10,42 @@
     group: '{{ vault_group }}'
     shell: /bin/false
 
-- name: create directories
-  block:
-    - name: create binary directory
-      file:
-        path: '{{ vault_bin_path }}'
-        state: directory
-        owner: root
-        group: root
-        mode: 0755
-
-    - name: create data, configuration, and certificates, and plugins directories
-      file:
-        path: '{{ item }}'
-        state: directory
-        owner: '{{ vault_user }}'
-        group: '{{ vault_group }}'
-        mode: 0700
-      with_items:
-        - '{{ vault_config_path }}'
-        - '{{ vault_data_path }}'
-        - '{{ vault_certs_path }}'
-        - '{{ vault_plugin_path }}'
-
-    - name: create log and run directories
-      file:
-        path: '{{ item }}'
-        state: directory
-        owner: '{{ vault_user }}'
-        group: '{{ vault_group }}'
-        mode: 0750
-      with_items:
-        - '{{ vault_run_path }}'
+- name: create vault directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.owner }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ vault_bin_path }}',
+        owner: 'root',
+        group: 'root',
+        mode: '0755' }
+    - { path: '{{ vault_config_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0700' }
+    - { path: '{{ vault_data_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0700' }
+    - { path: '{{ vault_certs_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0700' }
+    - { path: '{{ vault_plugin_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0700' }
+    - { path: '{{ vault_run_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0750' }
+    - { path: '{{ vault_log_path }}',
+        owner: '{{ vault_user }}',
+        group: '{{ vault_group }}',
+        mode: '0750' }
 
 - name: download vault
   get_url:
@@ -51,7 +55,8 @@
 
 - name: install vault
   unarchive:
-    src: "{{ vault_bin_path }}/{{ (vault_zip_url | urlsplit('path')).split('/')[-1] }}"
+    src: >-
+      {{ vault_bin_path }}/{{ (vault_zip_url|urlsplit('path')).split('/')[-1] }}
     dest: '{{ vault_bin_path }}'
     remote_src: yes
     validate_certs: no

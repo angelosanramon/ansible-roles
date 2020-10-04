@@ -1,0 +1,50 @@
+- set_fact:
+    param_acquire: "{{ kv.acquire|default('', true) }}"
+    param_release: "{{ kv.release|default('', true) }}"
+    request_payload: "{{ kv }}"
+
+- block:
+    - name: get all sessions
+      uri:
+        url: >-
+          http://127.0.0.1:{{ consul_port }}/v1/session/list
+        headers:
+          X-Consul-Token: '{{ acl_consul_token }}'
+      register: get_all_sessions_result
+
+    - set_fact:
+        acquire_session_id: >-
+          {%- set sessions = get_all_sessions_result.json|
+            selectattr('Name', '==', param_acquire)|list -%}
+          {{ (sessions|first).ID if sessions|length > 0 else param_acquire }}
+        release_session_id: >-
+          {%- set sessions = get_all_sessions_result.json|
+            selectattr('Name', '==', param_release)|list -%}
+          {{ (sessions|first).ID if sessions|length > 0 else param_release }}
+
+    - set_fact:
+        request_payload: "{{ request_payload|
+          combine({'acquire': acquire_session_id}) }}"
+      when: acquire_session_id != ''
+
+    - set_fact:
+        request_payload: "{{ request_payload|
+          combine({'release': release_session_id}) }}"
+      when: release_session_id != ''
+  when: param_acquire != '' or param_release != ''
+
+- set_fact:
+    url: >-
+      http://127.0.0.1:{{ consul_port }}/v1/kv/{{ request_payload.key }}?
+      {%- for k,v in request_payload.items() if k != 'key' and k != 'value' -%}
+      {{ k }}={{ v }}{{ '&' if not loop.last else '' }}
+      {%- endfor -%}
+
+- name: create kv
+  uri:
+    url: '{{ url }}'
+    headers:
+      X-Consul-Token: '{{ acl_consul_token }}'
+    method: PUT
+    body: '{{ kv.value }}'
+  register: create_kv_result
