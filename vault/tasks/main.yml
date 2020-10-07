@@ -39,5 +39,5 @@
   include_tasks: swaps.yml
   when: vault_swap_off
 
-- name: enable logrotate
+- name: configure logrotate
   include_tasks: logrotate.yml

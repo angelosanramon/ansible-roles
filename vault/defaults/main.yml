@@ -177,7 +177,7 @@ vault_firewall_ports:
 # Enable logrotate on all .log files under /var/log/vault directory
 vault_logrotate_config:
   paths:
-    - /var/log/vault/*.log
+    - "{{ vault_log_path }}/*.log"
   options:
     - daily
     - missingok

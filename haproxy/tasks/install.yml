@@ -1,0 +1,90 @@
+- name: install build dependencies
+  package:
+    name: '{{ item }}'
+    state: present
+  with_items: '{{ haproxy_build_dependencies }}'
+
+- name: create haproxy user group
+  group:
+    name: '{{ haproxy_group }}'
+    state: present
+
+- name: create haproxy user
+  user:
+    name: '{{ haproxy_user }}'
+    comment: HAProxy user
+    group: '{{ haproxy_group }}'
+    shell: /sbin/nologin
+
+- name: create haproxy directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ haproxy_config_path }}',
+        user: '{{ haproxy_user}}',
+        group: '{{ haproxy_group }}',
+        mode: '0755' }
+    - { path: '{{ haproxy_config_path }}/tls',
+        user: '{{ haproxy_user}}',
+        group: '{{ haproxy_group }}',
+        mode: '0700' }
+    - { path: '{{ haproxy_run_path }}',
+        user: 'root',
+        group: 'root',
+        mode: '0755' }
+    - { path: '{{ haproxy_chroot_path }}',
+        user: 'root',
+        group: 'root',
+        mode: '0440' }
+    - { path: '{{ haproxy_log_path }}',
+        user: '{{ haproxy_user}}',
+        group: '{{ haproxy_group }}',        
+        mode: '0755' }
+
+- name: download haproxy source file
+  get_url:
+    url: '{{ haproxy_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ haproxy_src_checksum }}'
+
+- set_fact:
+    source_filename: >-
+      {{ haproxy_src_url|urlsplit('path')|basename }}
+
+- name: uncompress haproxy source file
+  unarchive:
+    src: /usr/local/src/{{ source_filename }}
+    dest: /usr/local/src
+    remote_src: yes
+
+- name: build and install haproxy
+  shell: >-
+    make {{ haproxy_build_options|join(' ') }} && make install
+  args:
+    chdir: /usr/local/src/{{ ((source_filename|splitext)[0]|splitext)[0] }}
+    creates: /usr/local/sbin/haproxy
+  register: build_result
+
+- name: create haproxy systemd file
+  template:
+    src: haproxy_systemd.service.j2
+    dest: /etc/systemd/system/haproxy.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart haproxy
+
+- name: create haproxy config file
+  template:
+    src: haproxy.cfg.j2
+    dest: '{{ haproxy_config_path }}/{{ haproxy_config_file }}'
+    owner: '{{ haproxy_user }}'
+    group: '{{ haproxy_group }}'
+    mode: 0640
+  notify: restart haproxy

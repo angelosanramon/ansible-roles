@@ -1,0 +1,47 @@
+{%- set global_config = haproxy_global_config|
+  combine({'user': haproxy_user})| 
+  combine({'group': haproxy_group})|
+  combine({'chroot': haproxy_chroot_path})|
+  combine({'pidfile': haproxy_run_path + '/' + haproxy_pid_file })
+-%}
+{%- set params = {
+  'global': global_config,
+  'defaults': haproxy_defaults_config|default({}, true),
+  'frontend': haproxy_frontends_config|default({}, true),
+  'backend': haproxy_backends_config|default({}, true),
+  'listen': haproxy_listens_config|default({}, true),
+  'log-forward': haproxy_log_forwards_config|default({}, true),
+  'userlist': haproxy_userlists_config|default({}, true),
+  'peers': haproxy_peers_config|default({}, true),
+  'mailers': haproxy_mailers_config|default({}, true),
+  'program': haproxy_programs_config|default({}, true),
+  'http-errors': haproxy_http_errors_config|default({}, true),
+  'ring': haproxy_rings_config|default({}, true),
+  'resolvers': haproxy_resolvers_config
+} -%}
+{%- set configs = [] -%}
+{%- for param_key, param_value in params.items() if param_value|length > 0 -%}
+{%-   if param_key == 'defaults' or param_key == 'global' -%}
+{%-     set config = {param_key: param_value } -%}
+{%-   else -%}
+{%-     set config = param_value -%}
+{%-   endif -%}
+{%-   for key, value in config.items() -%}
+{{      configs.append(param_key + ' ' + key 
+          if param_key != 'defaults' and param_key != 'global' 
+            else param_key) }}
+{%-     for sub_key, sub_value in value.items() -%}
+{%-       if sub_value|type_debug == 'list' -%}
+{%-         for item in sub_value -%}
+{{            configs.append("    %-20s"|format(sub_key) + item|string) }}
+{%-         endfor -%}
+{%-       else -%}
+{{          configs.append("    %-20s"|format(sub_key) + sub_value|string) }}
+{%-       endif -%}
+{%-    endfor -%}
+{%-   endfor -%}
+{%- endfor -%}
+
+{% for config in configs %}
+{{   config }}
+{% endfor %}

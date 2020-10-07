@@ -1,0 +1,16 @@
+[Unit]
+Description=HAProxy Load Balancer
+After=network.target
+
+[Service]
+ExecStartPre={{ haproxy_install_path }}/sbin/haproxy -f {{ haproxy_config_path }}/{{ haproxy_config_file }} -c -q
+ExecStart={{ haproxy_install_path }}/sbin/haproxy -Ws -f {{ haproxy_config_path }}/{{ haproxy_config_file }} -p {{ haproxy_run_path }}/{{ haproxy_pid_file }}
+ExecReload={{ haproxy_install_path }}/sbin/haproxy -f {{ haproxy_config_path }}/{{ haproxy_config_file }} -c -q
+ExecReload=/bin/kill -USR2 $MAINPID
+SuccessExitStatus=143
+KillMode=mixed
+LimitNOFILE={{ haproxy_systemd_file_descriptor_limit }}
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

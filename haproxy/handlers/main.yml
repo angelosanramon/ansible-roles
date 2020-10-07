@@ -1,0 +1,35 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: start haproxy
+  service:
+    name: haproxy
+    state: started
+  listen: start haproxy
+
+- name: restart haproxy
+  service:
+    name: haproxy
+    state: restarted
+  listen: restart haproxy
+
+- name: reload haproxy
+  service:
+    name: haproxy
+    state: reloaded
+  listen: reload haproxy
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog

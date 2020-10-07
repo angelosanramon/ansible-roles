@@ -214,6 +214,20 @@ consul_tls_cert_create_options:
   - "-additional-dnsname={{ inventory_hostname }}"
   - "-additional-ipaddress={{ ansible_host }}"
 
+consul_logrotate_config:
+  paths:
+    - "{{ consul_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload consul
+      endscript
+
 consul_firewall_ports:
   - 8600/tcp
   - 8600/udp

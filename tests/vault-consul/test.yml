@@ -1,4 +1,55 @@
 ---
+- name: install haproxy
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          consul.cluster.local:
+            bind: "{{ ansible_host }}:8500"
+            default_backend: consul_servers
+          vault.cluster.local:
+            bind: "{{ ansible_host }}:8100"
+            default_backend: vault_servers
+        haproxy_backends_config:
+          consul_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/status/leader
+            default-server: check inter 10s
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.consul_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + '8500') }}
+              {%- endfor -%}
+              {{ servers }}
+          vault_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/sys/health
+            http-check: expect status 200,429
+            default-server: check inter 10s
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.vault_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + 
+                '8200') }}
+              {%- endfor -%}
+              {{ servers }}
+        haproxy_firewall_ports:
+          - 8404/tcp
+          - 8500/tcp
+          - 8100/tcp
+
 - name: install consul
   hosts: consul_servers
   become: yes
@@ -119,7 +170,6 @@
         owner: '{{ consul_user }}'
         group: '{{ consul_group }}'
         mode: '0644'
-
   roles: 
     - name: consul
       vars:
@@ -163,7 +213,7 @@
                 tls_disable: true
           storage:
             consul:
-              address: 192.168.1.40:8500
+              address: "{{ hostvars[groups.haproxy_servers[0]].ansible_host }}:8500"
               token: cc542a4d-3207-44a4-9d73-c0ac840439e9
           api_addr: http://{{ ansible_host}}:{{ vault_port }}
           cluster_addr: 'https://{{ ansible_host }}:{{ vault_cluster_port }}'
@@ -222,7 +272,6 @@
             password: mypassword
             token_policies:
               - vault_admin
-
   post_tasks:
     - name: delete ca cert file
       file:

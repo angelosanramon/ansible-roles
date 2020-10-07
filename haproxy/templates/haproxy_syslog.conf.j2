@@ -1,0 +1,9 @@
+# Collect log with UDP
+$ModLoad imudp
+$UDPServerAddress 127.0.0.1
+$UDPServerRun 514
+
+# Creating separate log files based on the severity
+{% for config in haproxy_syslog_config %}
+{{ config.facility_code }}.{{ config.severity_level }} {{ config.logfile }}
+{% endfor %}

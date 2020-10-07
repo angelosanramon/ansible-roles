@@ -1,0 +1,15 @@
+- name: create consul logrotate config file
+  copy:
+    content: |
+      {% for path in consul_logrotate_config.paths %}
+      {{ path }}
+      {% endfor %}
+      {
+      {% for option in consul_logrotate_config.options %}
+      {{ option }}
+      {% endfor %}
+      }
+    dest: /etc/logrotate.d/consul
+    owner: root
+    group: root
+    mode: 0644

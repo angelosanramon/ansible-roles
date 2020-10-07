@@ -6,3 +6,7 @@ consul3.cluster.local   ansible_host=192.168.1.42
 [vault_servers]
 vault1.cluster.local   ansible_host=192.168.1.43
 vault2.cluster.local   ansible_host=192.168.1.44
+
+[haproxy_servers]
+haproxy1.cluster.local   ansible_host=192.168.1.43
+haproxy2.cluster.local   ansible_host=192.168.1.44
