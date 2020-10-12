@@ -12,3 +12,6 @@
       {{ hostvars[item].ansible_host }} {{ hostvars[item].inventory_hostname}}
     state: present
   with_items: "{{ groups[haproxy_servers_group_name] }}"
+
+- name: install and enable firewalld
+  include_tasks: firewalld.yml

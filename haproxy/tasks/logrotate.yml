@@ -1,15 +1,7 @@
 - name: create haproxy logrotate config file
-  copy:
-    content: |
-      {% for path in haproxy_logrotate_config.paths %}
-      {{ path }}
-      {% endfor %}
-      {
-      {% for option in haproxy_logrotate_config.options %}
-      {{ option }}
-      {% endfor %}
-      }
+  template:
     dest: /etc/logrotate.d/haproxy
+    src: haproxy_logrotate.j2
     owner: root
     group: root
     mode: 0644

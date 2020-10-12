@@ -1,5 +1,5 @@
 ### Vault
-Ansible playbook to setup a Vault cluster.  
+Ansible role to setup a Vault cluster.  
 
 If the `vault_auto_unseal` variable is set to true, Vault will be automatically initialized and unseal. The unseal keys will be saved to a file in {{ vault_config_path }}/.vault_unseal_keys. The root token will is not saved. If the root token is needed, it can be generated using the unseal keys. See https://learn.hashicorp.com/tutorials/vault/generate-root for instructions.  
 

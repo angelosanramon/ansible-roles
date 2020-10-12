@@ -1,0 +1,46 @@
+{%- macro pretty_print(block_type='', block_name='', block_content=None, 
+spacing=4, startpos=0) -%}
+  {%- if block_content|type_debug == 'dict' -%}
+    {%- if block_type != '' -%}
+      {%- if block_content.name is defined -%}
+        {%- set name = block_content.name -%}
+        {%- set dummy = block_content.pop('name') -%}
+        {{- ' '*startpos + block_type + ' ' + name + ' {\n' -}}
+      {%- else -%}
+        {{- ' '*startpos + block_type + ' {\n' -}}
+      {%- endif -%}
+    {%- endif -%}
+    {%- for key, value in block_content.items() -%}
+      {%- if value|type_debug == 'dict' or value|type_debug == 'list' -%}
+        {{- pretty_print(block_type=key, block_content=value,
+        startpos=startpos + spacing) -}}
+      {%- else -%}
+        {{- ' '*(startpos + spacing) + key + ' ' + 
+        value|default('', true)|string + '\n' -}}
+      {%- endif -%}
+    {%- endfor -%}
+    {{- ' '*startpos + '}\n' if block_type != '' else '' -}}
+  {%- else -%}
+    {{- ' '*startpos + block_type + ' {\n' if block_type != '' else '' -}}
+    {%- for item in block_content -%}
+      {%- if item|type_debug == 'dict' -%}
+        {{- pretty_print(block_content=item, startpos=startpos) -}}
+      {%- else -%}
+        {{- ' '*(startpos + spacing) + item + '\n' -}}
+      {%- endif -%}
+    {%- endfor -%}
+    {{- ' '*startpos + '}\n' if block_type != '' else '' -}}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- for key, value in keepalived_configs.items() -%}
+  {%- if value|type_debug == 'dict' -%}
+    {{- pretty_print(block_type=key, block_content=value) -}}
+  {%- elif value|type_debug == 'list' -%}
+    {%- for item in value -%}
+      {{- pretty_print(block_type=key, block_content=item) -}}
+    {%- endfor -%}
+  {%- else -%}
+    {{- key + ' ' + value|default('', true)|string + '\n' -}}
+  {%- endif -%}
+{%- endfor -%}

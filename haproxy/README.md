@@ -1,5 +1,5 @@
 ### Haproxy
-Ansible playbook to setup HAProxy server.  
+Ansible role to setup HAProxy server.  
  
 ### Requirements:
 * Ansible needs to be installed on the host running this playbook. Tested on version 2.9.11.

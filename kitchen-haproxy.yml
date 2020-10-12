@@ -19,7 +19,7 @@ suites:
     driver_config:
       vm_hostname: haproxy1.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.50"}]
+        - ["private_network", {ip: "192.168.1.40"}]
   - name: haproxy2
     provisioner:
       command: >
@@ -27,7 +27,7 @@ suites:
     driver_config:
       vm_hostname: haproxy2.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.51"}]
+        - ["private_network", {ip: "192.168.2.40"}]
   - name: ansible
     provisioner:
       name: ansible_playbook
@@ -40,4 +40,4 @@ suites:
     driver_config:
       vm_hostname: ansible.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.52"}]
+        - ["private_network", {ip: "192.168.1.41"}]

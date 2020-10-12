@@ -1,12 +1,12 @@
 [consul_servers]
-consul1.cluster.local   ansible_host=192.168.1.40
-consul2.cluster.local   ansible_host=192.168.1.41
-consul3.cluster.local   ansible_host=192.168.1.42
+consul1.cluster.local   ansible_host=192.168.1.30
+consul2.cluster.local   ansible_host=192.168.2.30
+consul3.cluster.local   ansible_host=192.168.3.30
 
 [vault_servers]
-vault1.cluster.local   ansible_host=192.168.1.43
-vault2.cluster.local   ansible_host=192.168.1.44
+vault1.cluster.local   ansible_host=192.168.1.31
+vault2.cluster.local   ansible_host=192.168.2.31
 
 [haproxy_servers]
-haproxy1.cluster.local   ansible_host=192.168.1.43
-haproxy2.cluster.local   ansible_host=192.168.1.44
+haproxy1.cluster.local   ansible_host=192.168.1.32
+haproxy2.cluster.local   ansible_host=192.168.2.32

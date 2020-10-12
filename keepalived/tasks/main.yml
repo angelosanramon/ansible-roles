@@ -2,7 +2,7 @@
 - name: perform pre-install tasks
   include_tasks: preinstall.yml
 
-- name: build and install haproxy
+- name: build and install keepalived
   include_tasks: install.yml
 
 - name: configure logrotate

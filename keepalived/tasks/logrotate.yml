@@ -1,0 +1,7 @@
+- name: create keepalived logrotate config file
+  template:
+    dest: /etc/logrotate.d/keepalived
+    src: keepalived_logrotate.j2
+    owner: root
+    group: root
+    mode: 0644

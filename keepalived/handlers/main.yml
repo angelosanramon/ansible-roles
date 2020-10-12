@@ -1,0 +1,35 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: start keepalived
+  service:
+    name: keepalived
+    state: started
+  listen: start keepalived
+
+- name: restart keepalived
+  service:
+    name: keepalived
+    state: restarted
+  listen: restart keepalived
+
+- name: reload keepalived
+  service:
+    name: keepalived
+    state: reloaded
+  listen: reload keepalived
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld

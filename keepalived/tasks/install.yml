@@ -1,0 +1,68 @@
+---
+- name: install build dependencies
+  package:
+    name: '{{ item }}'
+    state: present
+  with_items: '{{ keepalived_build_dependencies }}'
+
+- name: create keepalived directories
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: 'root'
+    group: 'root'
+    mode: 0755
+  with_items:
+    - "{{ keepalived_config_path }}"
+    - "{{ keepalived_run_path }}"
+    - "{{ keepalived_log_path }}"
+
+- name: download keepalived source file
+  get_url:
+    url: '{{ keepalived_src_url }}'
+    dest: /usr/local/src
+    checksum: 'md5:{{ keepalived_src_checksum }}'
+
+- set_fact:
+    source_filename: >-
+      {{ keepalived_src_url|urlsplit('path')|basename }}
+
+- name: uncompress keepalived source file
+  unarchive:
+    src: /usr/local/src/{{ source_filename }}
+    dest: /usr/local/src
+    remote_src: yes
+
+- name: build and install keepalived
+  shell: |-
+    ./configure --prefix=/usr/local
+    make && make install
+  args:
+    chdir: /usr/local/src/{{ ((source_filename|splitext)[0]|splitext)[0] }}
+    creates: /usr/local/sbin/keepalived
+  register: build_result
+
+- name: create keepalived systemd file
+  template:
+    src: keepalived_systemd.service.j2
+    dest: /etc/systemd/system/keepalived.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart keepalived
+
+- name: create keepalived config file
+  template:
+    src: keepalived.conf.j2
+    dest: "{{ keepalived_config_path + '/' + keepalived_config_file }}"
+    owner: 'root'
+    group: 'root'
+    mode: 0644
+  notify: restart keepalived
+
+- name: start keepalived
+  service:
+    name: keepalived
+    state: started

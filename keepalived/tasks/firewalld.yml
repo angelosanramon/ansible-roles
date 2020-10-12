@@ -1,0 +1,12 @@
+- name: start firewalld
+  service:
+    name: firewalld
+    state: started
+
+- name: open firewall ports
+  firewalld:
+    rich_rule: rule protocol value='vrrp' accept
+    permanent: yes
+    immediate: yes
+    state: enabled
+  notify: restart firewalld

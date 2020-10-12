@@ -19,7 +19,7 @@ suites:
     driver_config:
       vm_hostname: consul1.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.20"}]
+        - ["private_network", {ip: "192.168.1.10"}]
   - name: consul2
     provisioner:
       command: >
@@ -27,7 +27,7 @@ suites:
     driver_config:
       vm_hostname: consul2.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.21"}]
+        - ["private_network", {ip: "192.168.2.10"}]
   - name: consul3
     provisioner:
       command: >
@@ -35,7 +35,7 @@ suites:
     driver_config:
       vm_hostname: consul3.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.22"}]
+        - ["private_network", {ip: "192.168.3.10"}]
   - name: ansible
     provisioner:
       name: ansible_playbook
@@ -48,4 +48,4 @@ suites:
     driver_config:
       vm_hostname: ansible.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.23"}]
+        - ["private_network", {ip: "192.168.1.11"}]

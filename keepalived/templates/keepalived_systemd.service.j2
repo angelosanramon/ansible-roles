@@ -1,0 +1,19 @@
+[Unit]
+Description=LVS and VRRP High Availability Monitor
+After=network-online.target syslog.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile={{ keepalived_run_path + '/' + keepalived_pid_file }}
+KillMode=process
+ExecStart=/usr/local/sbin/keepalived -f {{ keepalived_config_path + '/' + 
+    keepalived_config_file }} -p {{ keepalived_run_path + '/' + 
+    keepalived_pid_file }} {{ keepalived_cmdline_options|
+    reject('search', '-f ')|reject('search', '--use-file=')|
+    reject('search', '-p ')|reject('search', '--pid=')|
+    join(' ') }}
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

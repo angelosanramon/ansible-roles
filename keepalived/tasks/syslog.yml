@@ -5,8 +5,8 @@
 
 - name: create syslog config file
   template:
-    src: haproxy_syslog.conf.j2
-    dest: /etc/rsyslog.d/haproxy.conf
+    src: keepalived_syslog.conf.j2
+    dest: /etc/rsyslog.d/keepalived.conf
     owner: root
     group: root
     mode: 0644

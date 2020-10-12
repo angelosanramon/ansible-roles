@@ -1,0 +1,8 @@
+{%- for path in haproxy_logrotate_config.paths -%}
+  {{- path + '\n' -}}
+{%- endfor -%}
+{
+{% for option in haproxy_logrotate_config.options -%}
+  {{- ' '*4 + option + '\n' -}}
+{%- endfor -%}
+}

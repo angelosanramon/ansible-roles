@@ -1,3 +1,3 @@
 [vault_servers]
-vault1.cluster.local   ansible_host=192.168.1.30
-# vault2.cluster.local   ansible_host=192.168.1.31
+vault1.cluster.local   ansible_host=192.168.1.20
+vault2.cluster.local   ansible_host=192.168.2.20

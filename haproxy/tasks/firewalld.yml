@@ -1,4 +1,5 @@
-- firewalld:
+- name: open firewall ports
+  firewalld:
     port: '{{ item }}'
     permanent: yes
     state: enabled

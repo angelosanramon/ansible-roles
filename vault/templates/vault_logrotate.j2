@@ -1,0 +1,8 @@
+{%- for path in vault_logrotate_config.paths -%}
+  {{- path + '\n' -}}
+{%- endfor -%}
+{
+{% for option in vault_logrotate_config.options -%}
+  {{- ' '*4 + option + '\n' -}}
+{%- endfor -%}
+}

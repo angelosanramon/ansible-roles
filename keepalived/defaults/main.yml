@@ -1,0 +1,96 @@
+---
+keepalived_src_url: https://www.keepalived.org/software/keepalived-2.1.5.tar.gz
+keepalived_src_checksum: 27e1cfff5b8dd95062ad415957e663e5
+keepalived_config_path: /etc/keepalived
+keepalived_config_file: keepalived.conf
+keepalived_run_path: /run/keepalived
+keepalived_pid_file: keepalived.pid
+keepalived_log_path: /var/log/keepalived
+keepalived_log_file: keepalived.log
+keepalived_servers_group_name: keepalived_servers
+keepalived_cmdline_options:
+  - --log-facility=0
+  - --log-detail
+
+keepalived_configs:
+  global_defs:
+    notification_email:
+      - email@example.com
+    notification_email_from: email@example.com
+    smtp_server: 127.0.0.1
+    smtp_connect_timeout: 15
+  # vrrp_script:
+  #   - name: chk_haproxy
+  #     script: "'/usr/sbin/pidof haproxy'"
+  #     interval: 2
+  #     weight: 2
+  # vrrp_instance:
+  #   - name: HProxyLB_1
+  #     interface: |-
+  #       {%- for key, value in ansible_facts.items() if 
+  #         value.ipv4.network is defined and 
+  #         value.ipv4.network == '192.168.4.0' -%}
+  #       {{- key -}}
+  #       {%- endfor -%}
+  #     state: >-
+  #       {{- 'MASTER' if groups.haproxy_servers|first == inventory_hostname else
+  #         'BACKUP' -}}
+  #     priority: >-
+  #       {%- for hostname in groups.haproxy_servers|reverse -%}
+  #         {%- if hostname == inventory_hostname -%}
+  #           {{- loop.index -}}
+  #         {%- endif -%}
+  #       {%- endfor -%}
+  #     virtual_router_id: 1
+  #     smtp_alert:
+  #     authentication:
+  #       auth_type: PASS
+  #       auth_pass: mypassword
+  #     unicast_src_ip: >-
+  #       {%- for key, value in ansible_facts.items() if 
+  #         value.ipv4.network is defined and 
+  #         value.ipv4.network == '192.168.4.0' -%}
+  #       {{- value.ipv4.address -}}
+  #       {%- endfor -%}
+  #     unicast_peer: >-
+  #       {%- set servers = [] -%}
+  #       {%- for hostname in groups.haproxy_servers if 
+  #         hostname != inventory_hostname -%}
+  #         {%- for key, value in hostvars[hostname].ansible_facts.items() if
+  #           value.ipv4.network is defined and 
+  #           value.ipv4.network == '192.168.4.0' -%}
+  #           {{- servers.append(value.ipv4.address) -}}
+  #         {%- endfor -%}
+  #       {%- endfor -%}
+  #       {{- servers -}}
+  #     virtual_ipaddress:
+  #       - 192.168.4.100
+  #     track_script:
+  #       - chk_haproxy
+
+keepalived_logrotate_config:
+  paths:
+    - "{{ keepalived_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - "{{- 'postrotate' + '\n' + ' '*8 + 
+        '/usr/bin/systemctl reload keepalived' + 
+        '\n' + ' '*4 + 'endscript' -}}"
+
+keepalived_syslog_config:
+  - facility_code: local0
+    severity_level: '*'
+    logfile: "{{ keepalived_log_path + '/' + keepalived_log_file }}"
+
+keepalived_build_dependencies:
+  - make
+  - gcc
+  - openssl-devel
+  - libnl3-devel
+  - iptables-devel
+  - net-snmp-devel
+  - glib2-devel

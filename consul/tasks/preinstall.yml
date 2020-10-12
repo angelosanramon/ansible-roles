@@ -17,5 +17,6 @@
       {{ hostvars[item].ansible_host }} {{ hostvars[item].inventory_hostname}}
     state: present
   with_items: '{{ groups[consul_servers_group_name] }}'
+  when: consul_agent_mode == 'server'
 
 - include_tasks: firewalld.yml

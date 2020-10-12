@@ -20,8 +20,10 @@
     url: >-
       http://127.0.0.1:{{ consul_port }}/v1/status/leader
   register: leader_election_result
-  until: leader_election_result.json != ""
-  retries: 2
+  until:
+    - leader_election_result.status == 200
+    - leader_election_result.json != ""
+  retries: 5
   delay: 30
 
 - set_fact:

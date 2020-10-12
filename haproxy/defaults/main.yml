@@ -8,16 +8,12 @@ haproxy_config_file: haproxy.cfg
 haproxy_run_path: /run/haproxy
 haproxy_pid_file: haproxy.pid
 haproxy_log_path: /var/log/haproxy
+haproxy_log_file: haproxy.log
 haproxy_chroot_path: /var/lib/haproxy
 haproxy_install_path: /usr/local
 haproxy_servers_group_name: haproxy_servers
 haproxy_systemd_file_descriptor_limit: 66560
 haproxy_match_process_cpu: false
-
-haproxy_syslog_config:
-  - facility_code: local0
-    severity_level: '*'
-    logfile: "{{ haproxy_log_path }}/haproxy.log"
 
 haproxy_global_config:
   maxconn: 10000
@@ -173,10 +169,14 @@ haproxy_logrotate_config:
     - rotate 7
     - dateext
     - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload haproxy
-      endscript
+    - "{{- 'postrotate' + '\n' + ' '*8 + 
+        '/usr/bin/systemctl reload haproxy' + 
+        '\n' + ' '*4 + 'endscript' -}}"
+
+haproxy_syslog_config:
+  - facility_code: local0
+    severity_level: '*'
+    logfile: "{{ haproxy_log_path + '/' + haproxy_log_file }}"
 
 haproxy_build_options:
   - >-

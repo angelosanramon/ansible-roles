@@ -184,7 +184,6 @@ vault_logrotate_config:
     - rotate 7
     - dateext
     - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload vault
-      endscript
+    - "{{- 'postrotate' + '\n' + ' '*8 + 
+        '/usr/bin/systemctl reload vault' + 
+        '\n' + ' '*4 + 'endscript' -}}"

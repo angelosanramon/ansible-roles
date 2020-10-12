@@ -1,5 +1,5 @@
 ### Consul
-Ansible playbook to setup a Consul cluster. This playbook automatically generates TLS certificates for server-to-server communication using consul tls command.
+Ansible role to setup a Consul cluster. This playbook automatically generates TLS certificates for server-to-server communication using consul tls command.
 
 ### Requirements:
 * Ansible needs to be installed on the host running this playbook. Tested on version 2.9.11.
