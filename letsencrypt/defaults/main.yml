@@ -1,0 +1,20 @@
+---
+dns_provider: route53
+
+acme_email: email@example.com
+acme_environment: staging
+acme_staging_directory: https://acme-staging-v02.api.letsencrypt.org/directory
+acme_production_directory: https://acme-v02.api.letsencrypt.org/directory
+
+certs_path: certs
+certificates: []
+# certificates:
+#   - common_name: example.com
+#     subject_alt_name: 
+#       - consul.example.com
+#       - vault.example.com
+#     valid_days: 7
+
+route53_zone: example.com
+# aws_access_key: your_aws_access_key
+# aws_secret_key: your_aws_secret_key

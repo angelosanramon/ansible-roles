@@ -1,0 +1,10 @@
+---
+- name: install boto
+  pip:
+    name: boto
+
+- name: request an acme certificate
+  include_tasks: request_certificate.yml
+  with_items: "{{ certificates }}"
+  loop_control:
+    loop_var: certificate

@@ -9,6 +9,7 @@ haproxy_run_path: /run/haproxy
 haproxy_pid_file: haproxy.pid
 haproxy_log_path: /var/log/haproxy
 haproxy_log_file: haproxy.log
+haproxy_certs_path: "{{ haproxy_config_path }}/tls"
 haproxy_chroot_path: /var/lib/haproxy
 haproxy_install_path: /usr/local
 haproxy_servers_group_name: haproxy_servers

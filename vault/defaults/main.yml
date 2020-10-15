@@ -24,12 +24,17 @@ vault_config_options:
   ui: true
   listener:
     - tcp:
-        address: 0.0.0.0:{{ vault_port }}
+        address: "{{ ansible_host}}:{{ vault_port }}"
         cluster_address: '{{ ansible_host}}:{{ vault_cluster_port }}'
         tls_disable: true
   storage:
     file:
       path: '{{ vault_data_path }}'
+  # sentinel:
+  #   additional_enabled_modules:
+  #     - http
+  # telemetry:
+  #   statsite_address: statsite.company.local:8125
   api_addr: http://{{ ansible_host}}:{{ vault_port }}
   cluster_addr: 'https://{{ ansible_host}}:{{ vault_cluster_port }}'
   log_level: info

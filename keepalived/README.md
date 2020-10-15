@@ -3,7 +3,7 @@ Ansible role to install and configure Keepalived for setting up highly-available
 cluster.
 
 ### Requirements:
-* Ansible needs to be installed on the host running this playbook. Tested on version 2.9.11.
+* Ansible needs to be installed on the host running this role. Tested on version 2.9.11.
 
 ### Platform:
 * Tested on Centos 8 only

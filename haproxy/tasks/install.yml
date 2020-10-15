@@ -28,7 +28,7 @@
         user: '{{ haproxy_user}}',
         group: '{{ haproxy_group }}',
         mode: '0755' }
-    - { path: '{{ haproxy_config_path }}/tls',
+    - { path: '{{ haproxy_certs_path }}',
         user: '{{ haproxy_user}}',
         group: '{{ haproxy_group }}',
         mode: '0700' }

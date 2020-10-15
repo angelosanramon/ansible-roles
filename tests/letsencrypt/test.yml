@@ -1,0 +1,6 @@
+---
+- name: request letsencrypt certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - letsencrypt

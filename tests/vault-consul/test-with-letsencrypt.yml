@@ -1,4 +1,120 @@
 ---
+- name: request letsencrypt certificates
+  hosts: localhost
+  become: yes
+  vars:
+    haproxy_certs_path: /etc/haproxy/tls
+    haproxy_user: haproxy
+    haproxy_group: haproxy
+    vault_certs_path: /etc/vault/tls
+    vault_user: vault
+    vault_group: vault
+  roles:
+    - name: letsencrypt
+      vars:
+        acme_email: email@example.com
+        certificates:
+          - common_name: example.com
+            subject_alt_name: 
+              - consul.example.com
+              - vault.example.com
+            valid_days: 7
+        route53_zone: example.com
+        aws_access_key: your_aws_access_key
+        aws_secret_key: your_aws_secret_key
+  post_tasks:
+    - name: load letsencrypt cert to variable
+      slurp:
+        src: certs/example.com/example.com-fullchain.crt
+      register: cert_content
+
+    - name: load letsencrypt private key to variable
+      slurp:
+        src: certs/example.com/example.com.pem
+      register: key_content
+
+    - name: create haproxy user group
+      group:
+        name: "{{ haproxy_group }}"
+        state: present
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.haproxy_servers }}"
+
+    - name: create haproxy user
+      user:
+        name: "{{ haproxy_user }}"
+        group: "{{ haproxy_group }}"
+        shell: /bin/false
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.haproxy_servers }}"
+
+    - name: create haproxy certs directory
+      file:
+        path: "{{ haproxy_certs_path }}"
+        state: directory
+        owner: "{{ haproxy_user }}"
+        group: "{{ haproxy_group }}"
+        mode: 0700
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.haproxy_servers }}"
+
+    - name: copy cert and private key to haproxy servers
+      copy:
+        content: >-
+          {{- cert_content.content|b64decode + 
+            key_content.content|b64decode -}}
+        dest: "{{ haproxy_certs_path }}/example.com.pem"
+        owner: "{{ haproxy_user }}"
+        group: "{{ haproxy_group }}"
+        mode: 0600
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.haproxy_servers }}"
+
+    - name: create vault user group
+      group:
+        name: "{{ vault_user }}"
+        state: present
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.vault_servers }}"
+
+    - name: create vault user
+      user:
+        name: "{{ vault_user }}"
+        group: "{{ vault_group }}"
+        shell: /bin/false
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.vault_servers }}"
+
+    - name: create vault certs directory
+      file:
+        path: "{{ vault_certs_path }}"
+        state: directory
+        owner: "{{ vault_user }}"
+        group: "{{ vault_group }}"
+        mode: 0700
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.vault_servers }}"
+
+    - name: copy cert to vault servers
+      copy:
+        content: "{{ cert_content.content|b64decode }}"
+        dest: "{{ vault_certs_path }}/example.com.crt"
+        owner: "{{ vault_user }}"
+        group: "{{ vault_group }}"
+        mode: 0644
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.vault_servers }}"
+
+    - name: copy private key to vault servers
+      copy:
+        content: "{{ key_content.content|b64decode }}"
+        dest: "{{ vault_certs_path }}/example.com.pem"
+        owner: "{{ vault_user }}"
+        group: "{{ vault_group }}"
+        mode: 0644
+      delegate_to: "{{ item }}"   
+      with_items: "{{ groups.vault_servers }}"
+
 - name: install haproxy
   hosts: haproxy_servers
   become: yes
@@ -49,9 +165,9 @@
                 {%- set servers = [] -%}
                 {%- for hostname in groups.haproxy_servers if 
                   hostname != inventory_hostname -%}
-                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
-                    value.ipv4.network is defined and 
-                    value.ipv4.network == '192.168.4.0' -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items()
+                  if value.ipv4.network is defined and 
+                  value.ipv4.network == '192.168.4.0' -%}
                     {{- servers.append(value.ipv4.address) -}}
                   {%- endfor -%}
                 {%- endfor -%}
@@ -72,10 +188,14 @@
           option: httplog
         haproxy_frontends_config:
           consul.cluster.local:
-            bind: 192.168.4.100:8500
+            bind: >-
+              192.168.4.100:8500 ssl crt
+              {{ haproxy_certs_path }}/example.com.pem
             default_backend: consul_servers
           vault.cluster.local:
+            mode: tcp
             bind: 192.168.4.100:8200
+            option: tcplog
             default_backend: vault_servers
         haproxy_backends_config:
           consul_servers:
@@ -90,8 +210,11 @@
               {%- endfor -%}
               {{ servers }}
           vault_servers:
+            mode: tcp
             balance: roundrobin
-            option: httpchk GET /v1/sys/health
+            option:
+              - httpchk GET /v1/sys/health
+              - ssl-hello-chk
             http-check: expect status 200,429
             default-server: check inter 10s
             server: >-
@@ -197,7 +320,6 @@
     consul_user: consul
     consul_group: consul
     consul_domain: consul
-
   pre_tasks:
     - name: create consul user group
       group:
@@ -263,8 +385,9 @@
           listener:
             - tcp:
                 address: "{{ ansible_host}}:{{ vault_port }}"
-                cluster_address: "{{ ansible_host }}:{{ vault_cluster_port }}"
-                tls_disable: true
+                cluster_address: "{{ ansible_host}}:{{ vault_cluster_port }}"
+                tls_cert_file: /etc/vault/tls/example.com.crt
+                tls_key_file: /etc/vault/tls/example.com.pem
           storage:
             consul:
               address: 127.0.0.1:8500
