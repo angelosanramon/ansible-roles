@@ -1,0 +1,77 @@
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: memcached_exporter
+    firewall_ports: "{{ memcached_exporter_firewall_ports }}"
+
+- name: create memcached exporter user group
+  group:
+    name: '{{ memcached_exporter_group }}'
+    state: present
+
+- name: create memcached exporter user
+  user:
+    name: '{{ memcached_exporter_user }}'
+    group: '{{ memcached_exporter_group }}'
+    shell: /sbin/nologin
+
+- name: create memcached exporter log directory
+  file:
+    path: '{{ memcached_exporter_log_path }}'
+    state: directory
+    owner: '{{ memcached_exporter_user }}'
+    group: '{{ memcached_exporter_group }}'
+    mode: 0755
+
+- name: download memcached exporter binary package
+  get_url:
+    url: '{{ memcached_exporter_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ memcached_exporter_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ memcached_exporter_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress memcached exporter binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy memcached exporter binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/memcached_exporter
+        dest: "{{ node_exporter_bin_path }}/memcached_exporter"
+        owner: "{{ memcached_exporter_user }}"
+        group: "{{ memcached_exporter_group }}"
+        mode: 0755
+        remote_src: yes
+  when: download_result is changed
+
+- name: create memcached exporter systemd file
+  template:
+    src: memcached_exporter_systemd.service.j2
+    dest: /etc/systemd/system/memcached_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart memcached_exporter
+
+- name: start memcached_exporter
+  service:
+    name: memcached_exporter
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: memcached_exporter
+    logrotate_config: "{{ memcached_exporter_logrotate_config }}"

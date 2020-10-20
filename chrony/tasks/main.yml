@@ -1,0 +1,24 @@
+---
+- name: install chrony
+  package:
+   name: chrony
+   state: present
+
+- name: configure chrony config file
+  template:
+    src: chrony.conf.j2
+    dest: /etc/chrony.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart chronyd
+
+- name: Name for timezone module.
+  timezone:
+    name: "{{ chrony_timezone }}"
+
+- name: start chronyd
+  service:
+    name: chronyd
+    state: started

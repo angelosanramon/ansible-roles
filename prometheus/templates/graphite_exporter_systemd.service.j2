@@ -1,0 +1,26 @@
+{%- set cmdline_options = graphite_exporter_cmdline_options|
+    reject('search', '--web.listen-address')|
+    reject('search', '--graphite.listen-address')|
+    reject('search', '--graphite.mapping-config')|list
+-%}
+[Unit]
+Description=Graphite Exporter
+After=network.target
+
+[Service]
+User={{ graphite_exporter_user }}
+Group={{ graphite_exporter_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ graphite_exporter_bin_path }}/graphite_exporter \
+    --web.listen-address={{ graphite_exporter_web_listen_address }} \
+    --graphite.listen-address={{ graphite_exporter_graphite_listen_address }} \
+    --graphite.mapping-config={{ graphite_exporter_config_path }}/{{
+    graphite_exporter_config_file }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + graphite_exporter_log_path + '/' + 
+    graphite_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

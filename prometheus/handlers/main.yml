@@ -1,0 +1,44 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld
+
+- name: include prometheus handler
+  include: prometheus.yml
+
+- name: include alertmanager handler
+  include: alertmanager.yml
+
+- name: include node exporter handler
+  include: node_exporter.yml
+
+- name: include blackbox exporter handler
+  include: blackbox_exporter.yml
+
+- name: include consul exporter handler
+  include: consul_exporter.yml
+
+- name: include graphite exporter handler
+  include: graphite_exporter.yml
+
+- name: include haproxy exporter handler
+  include: haproxy_exporter.yml
+
+- name: include memcached exporter handler
+  include: memcached_exporter.yml
+
+- name: include mysqld exporter handler
+  include: mysqld_exporter.yml
+
+- name: include statsd exporter handler
+  include: statsd_exporter.yml
+
+- name: include pushgateway handler
+  include: pushgateway.yml

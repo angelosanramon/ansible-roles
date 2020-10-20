@@ -1,0 +1,39 @@
+{%- if prometheus_global_config|default({}, true)|length > 0 -%}
+global:
+  {{ prometheus_global_config|to_nice_yaml(indent=2)|indent(width=2) }}
+{% endif %}
+
+{%- if prometheus_rule_files_config|default([], true)|length > 0 -%}
+rule_files:
+  {{ prometheus_rule_files_config|to_nice_yaml(indent=2)|indent(width=2) }}
+{% endif %}
+
+{%- if prometheus_scrape_configs|default([], true)|length > 0 -%}
+scrape_configs:
+  {{ prometheus_scrape_configs|to_nice_yaml(indent=2)|indent(width=2) }}
+{% endif %}
+
+{%- if prometheus_alert_relabel_configs|default([], true)|length > 0 or
+prometheus_alertmanager_config|default([], true)|length > 0 -%}
+alerting:
+  {%- if prometheus_alert_relabel_configs|default([], true)|length > 0 -%}
+  {{- '\n  ' + 'alert_relabel_configs:'|indent(width=2) + '\n' -}}
+    {{ ' '*4 + prometheus_alert_relabel_configs|to_nice_yaml(indent=2)|
+    indent(width=4) }}
+  {%- endif -%}
+  {%- if prometheus_alertmanager_config|default([], true)|length > 0 -%}
+  {{- '\n  ' + 'alertmanagers:'|indent(width=2) + '\n' -}}
+    {{ ' '*4 + prometheus_alertmanager_config|to_nice_yaml(indent=2)|
+    indent(width=4) }}
+  {%- endif -%}
+{% endif %}
+
+{%- if prometheus_remote_write_config|default([], true)|length > 0 -%}
+remote_write:
+  {{ prometheus_remote_write_config|to_nice_yaml(indent=2)|indent(width=2) }}
+{% endif %}
+
+{%- if prometheus_remote_read_config|default([], true)|length > 0 -%}
+remote_write:
+  {{ prometheus_remote_read_config|to_nice_yaml(indent=2)|indent(width=2) }}
+{% endif %}

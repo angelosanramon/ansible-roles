@@ -1,0 +1,16 @@
+---
+chrony_servers: []
+chrony_pool: pool.ntp.org iburst
+chrony_driftfile: /var/lib/chrony/drift
+chrony_makestep: 1.0 3
+chrony_rtcsync:
+chrony_logdir: /var/log/chrony
+chrony_keyfile: /etc/chrony.keys
+chrony_leapsectz: right/UTC
+# chrony_hwtimestamp: *
+# chrony_minsources: 2
+# chrony_allow: 192.168.0.0/16
+# chrony_local: stratum 10
+# chrony_log: measurements statistics tracking
+
+chrony_timezone: America/Los_Angeles

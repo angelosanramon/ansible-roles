@@ -1,0 +1,97 @@
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: blackbox_exporter
+    firewall_ports: "{{ blackbox_exporter_firewall_ports }}"
+
+- name: create blackbox exporter user group
+  group:
+    name: '{{ blackbox_exporter_group }}'
+    state: present
+
+- name: create blackbox exporter user
+  user:
+    name: '{{ blackbox_exporter_user }}'
+    group: '{{ blackbox_exporter_group }}'
+    shell: /sbin/nologin
+
+- name: create blackbox exporter directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ blackbox_exporter_config_path }}',
+        user: '{{ blackbox_exporter_user}}',
+        group: '{{ blackbox_exporter_group }}',
+        mode: '0755' }
+    - { path: '{{ blackbox_exporter_log_path }}',
+        user: '{{ blackbox_exporter_user}}',
+        group: '{{ blackbox_exporter_group }}',
+        mode: '0755' }
+
+- name: download blackbox exporter binary package
+  get_url:
+    url: '{{ blackbox_exporter_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ blackbox_exporter_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ blackbox_exporter_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress blackbox exporter binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy blackbox exporter binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/blackbox_exporter
+        dest: "{{ blackbox_exporter_bin_path }}/blackbox_exporter"
+        owner: "{{ blackbox_exporter_user }}"
+        group: "{{ blackbox_exporter_group }}"
+        mode: 0755
+        remote_src: yes
+  when: download_result is changed
+
+- name: create blackbox exporter systemd file
+  template:
+    src: blackbox_exporter_systemd.service.j2
+    dest: /etc/systemd/system/blackbox_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart blackbox_exporter
+
+- name: create blackbox exporter config file
+  template:
+    src: blackbox_exporter.yml.j2
+    dest: >-
+      {{- blackbox_exporter_config_path + '/' + 
+      blackbox_exporter_config_file -}}
+    owner: '{{ blackbox_exporter_user }}'
+    group: '{{ blackbox_exporter_group }}'
+    mode: 0640
+  notify: restart blackbox_exporter
+
+- name: start blackbox_exporter
+  service:
+    name: blackbox_exporter
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: blackbox_exporter
+    logrotate_config: "{{ blackbox_exporter_logrotate_config }}"

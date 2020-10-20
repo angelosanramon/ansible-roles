@@ -1,0 +1,36 @@
+---
+mysqld_exporter_src_url: >-
+  https://github.com/prometheus/mysqld_exporter/releases/download/v0.12.1/mysqld_exporter-0.12.1.linux-amd64.tar.gz
+mysqld_exporter_src_checksum: >-
+  133b0c281e5c6f8a34076b69ade64ab6cac7298507d35b96808234c4aa26b351
+mysqld_exporter_user: mysqld_exporter
+mysqld_exporter_group: mysqld_exporter
+mysqld_exporter_config_path: /etc/mysqld_exporter
+mysqld_exporter_mysql_file: mysql.cnf
+mysqld_exporter_bin_path: /usr/local/bin
+mysqld_exporter_log_path: /var/log/mysqld_exporter
+mysqld_exporter_log_file: mysqld_exporter.log
+mysqld_exporter_web_listen_port: 9104
+mysqld_exporter_web_listen_address: >-
+  0.0.0.0:{{ mysqld_exporter_web_listen_port }}
+mysqld_exporter_cmdline_options: []
+
+mysqld_exporter_mysql_username: mysqlusername
+mysqld_exporter_mysql_password: mysqlpassword
+
+mysqld_exporter_firewall_ports:
+  - "{{ mysqld_exporter_web_listen_port }}/tcp"
+
+mysqld_exporter_logrotate_config:
+  paths:
+    - "{{ mysqld_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload mysqld_exporter
+      endscript

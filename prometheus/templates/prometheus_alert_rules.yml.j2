@@ -1,0 +1,4 @@
+{%- if prometheus_alert_rules|length > 0 -%}
+groups:
+  {{ prometheus_alert_rules | to_nice_yaml(indent=2) | indent(2,False) }}
+{%- endif -%}

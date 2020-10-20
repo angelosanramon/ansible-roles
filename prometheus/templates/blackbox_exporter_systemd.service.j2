@@ -1,0 +1,25 @@
+{%- set cmdline_options = blackbox_exporter_cmdline_options|
+    reject('search', '--config.file')|
+    reject('search', '--web.listen-address')|list
+-%}
+[Unit]
+Description=Blackbox Exporter
+After=network.target
+
+[Service]
+User={{ blackbox_exporter_user }}
+Group={{ blackbox_exporter_group }}
+Type=simple
+ExecReload=/bin/sh -c '/bin/kill -HUP $(/bin/pidof blackbox_exporter)'
+ExecStart=/bin/sh -c '{{ blackbox_exporter_bin_path }}/blackbox_exporter \
+    --config.file={{ blackbox_exporter_config_path }}/{{
+    blackbox_exporter_config_file }} \
+    --web.listen-address={{ blackbox_exporter_web_listen_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + blackbox_exporter_log_path + '/' + 
+    blackbox_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

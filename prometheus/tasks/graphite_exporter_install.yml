@@ -1,0 +1,97 @@
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: graphite_exporter
+    firewall_ports: "{{ graphite_exporter_firewall_ports }}"
+
+- name: create graphite exporter user group
+  group:
+    name: '{{ graphite_exporter_group }}'
+    state: present
+
+- name: create graphite exporter user
+  user:
+    name: '{{ graphite_exporter_user }}'
+    group: '{{ graphite_exporter_group }}'
+    shell: /sbin/nologin
+
+- name: create graphite exporter directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ graphite_exporter_config_path }}',
+        user: '{{ graphite_exporter_user}}',
+        group: '{{ graphite_exporter_group }}',
+        mode: '0755' }
+    - { path: '{{ graphite_exporter_log_path }}',
+        user: '{{ graphite_exporter_user}}',
+        group: '{{ graphite_exporter_group }}',
+        mode: '0755' }
+
+- name: download graphite exporter binary package
+  get_url:
+    url: '{{ graphite_exporter_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ graphite_exporter_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ graphite_exporter_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress graphite exporter binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy graphite exporter binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/graphite_exporter
+        dest: "{{ graphite_exporter_bin_path }}/graphite_exporter"
+        owner: "{{ graphite_exporter_user }}"
+        group: "{{ graphite_exporter_group }}"
+        mode: 0755
+        remote_src: yes
+  when: download_result is changed
+
+- name: create graphite exporter systemd file
+  template:
+    src: graphite_exporter_systemd.service.j2
+    dest: /etc/systemd/system/graphite_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart graphite_exporter
+
+- name: create graphite exporter config file
+  template:
+    src: graphite_mapping.conf.j2
+    dest: >-
+      {{- graphite_exporter_config_path + '/' + 
+      graphite_exporter_config_file -}}
+    owner: '{{ graphite_exporter_user }}'
+    group: '{{ graphite_exporter_group }}'
+    mode: 0640
+  notify: restart graphite_exporter
+
+- name: start graphite_exporter
+  service:
+    name: graphite_exporter
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: graphite_exporter
+    logrotate_config: "{{ graphite_exporter_logrotate_config }}"

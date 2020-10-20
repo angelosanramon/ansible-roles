@@ -1,0 +1,48 @@
+---
+alertmanager_src_url: >-
+  https://github.com/prometheus/alertmanager/releases/download/v0.21.0/alertmanager-0.21.0.linux-amd64.tar.gz
+alertmanager_src_checksum: >-
+  9ccd863937436fd6bfe650e22521a7f2e6a727540988eef515dde208f9aef232
+alertmanager_user: alertmanager
+alertmanager_group: alertmanager
+alertmanager_config_path: /etc/alertmanager
+alertmanager_config_file: alertmanager.yml
+alertmanager_bin_path: /usr/local/bin
+alertmanager_data_path: /var/lib/alertmanager
+alertmanager_log_path: /var/log/alertmanager
+alertmanager_log_file: alertmanager.log
+alertmanager_web_listen_port: 9093
+alertmanager_web_listen_address: "0.0.0.0:{{ alertmanager_web_listen_port }}"
+alertmanager_cluster_port: 9094
+alertmanager_servers_group_name: alertmanager_servers
+alertmanager_cmdline_options: []
+
+alertmanager_global_config:
+  resolve_timeout: 5m
+
+alertmanager_templates_config:
+  - "{{ alertmanager_config_path }}/templates/*.tmpl"
+
+alertmanager_route_config: []
+
+alertmanager_receivers_config:
+
+alertmanager_inhibit_rules_config:
+
+alertmanager_firewall_ports:
+  - "{{ alertmanager_web_listen_port }}/tcp"
+  - "{{ alertmanager_cluster_port }}/tcp"
+
+alertmanager_logrotate_config:
+  paths:
+    - "{{ alertmanager_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload alertmanager
+      endscript

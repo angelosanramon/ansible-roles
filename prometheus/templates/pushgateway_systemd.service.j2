@@ -1,0 +1,21 @@
+{%- set cmdline_options = pushgateway_cmdline_options|
+    reject('search', '--web.listen-address')|list
+-%}
+[Unit]
+Description=Pushgateway Exporter
+After=network.target
+
+[Service]
+User={{ pushgateway_user }}
+Group={{ pushgateway_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ pushgateway_bin_path }}/pushgateway \
+    --web.listen-address={{ pushgateway_web_listen_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + pushgateway_log_path + '/' + 
+    pushgateway_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

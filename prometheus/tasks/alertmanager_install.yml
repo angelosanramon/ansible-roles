@@ -1,0 +1,111 @@
+- name: modify hosts file
+  include_tasks: hostsfile.yml
+  vars:
+    server_groups: "{{ alertmanager_servers_group_name }}"
+
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: alertmanager
+    firewall_ports: "{{ alertmanager_firewall_ports }}"
+
+- name: create alertmanager user group
+  group:
+    name: '{{ alertmanager_group }}'
+    state: present
+
+- name: create alertmanager user
+  user:
+    name: '{{ alertmanager_user }}'
+    group: '{{ alertmanager_group }}'
+    shell: /sbin/nologin
+
+- name: create alertmanager directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ alertmanager_config_path }}',
+        user: '{{ alertmanager_user}}',
+        group: '{{ alertmanager_group }}',
+        mode: '0755' }
+    - { path: '{{ alertmanager_config_path }}/templates',
+        user: '{{ alertmanager_user}}',
+        group: '{{ alertmanager_group }}',
+        mode: '0755' }
+    - { path: '{{ alertmanager_data_path }}',
+        user: '{{ alertmanager_user}}',
+        group: '{{ alertmanager_group }}',
+        mode: '0755' }
+    - { path: '{{ alertmanager_log_path }}',
+        user: '{{ alertmanager_user}}',
+        group: '{{ alertmanager_group }}',
+        mode: '0755' }
+
+- name: download alertmanager binary package
+  get_url:
+    url: '{{ alertmanager_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ alertmanager_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ alertmanager_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress alertmanager binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy alertmanager binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/{{ item }}
+        dest: "{{ alertmanager_bin_path }}/{{ item }}"
+        owner: "{{ alertmanager_user }}"
+        group: "{{ alertmanager_group }}"
+        mode: 0755
+        remote_src: yes
+      with_items:
+        - alertmanager
+        - amtool
+  when: download_result is changed
+
+- name: create alertmanager systemd file
+  template:
+    src: alertmanager_systemd.service.j2
+    dest: /etc/systemd/system/alertmanager.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart alertmanager
+
+- name: create alertmanager config file
+  template:
+    src: alertmanager.yml.j2
+    dest: '{{ alertmanager_config_path }}/{{ alertmanager_config_file }}'
+    owner: '{{ alertmanager_user }}'
+    group: '{{ alertmanager_group }}'
+    mode: 0640
+  notify: restart alertmanager
+
+- name: start alertmanager
+  service:
+    name: alertmanager
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: alertmanager
+    logrotate_config: "{{ alertmanager_logrotate_config }}"

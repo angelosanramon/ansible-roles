@@ -1,0 +1,30 @@
+---
+pushgateway_src_url: >-
+  https://github.com/prometheus/pushgateway/releases/download/v1.3.0/pushgateway-1.3.0.linux-amd64.tar.gz
+pushgateway_src_checksum: >-
+  1ea7260a41c710a5b0f8ca1b90d18e70afdcc98ce23de61f88aba79a73d85947
+pushgateway_user: pushgateway
+pushgateway_group: pushgateway
+pushgateway_bin_path: /usr/local/bin
+pushgateway_log_path: /var/log/pushgateway
+pushgateway_log_file: pushgateway.log
+pushgateway_web_listen_port: 9091
+pushgateway_web_listen_address: "0.0.0.0:{{ pushgateway_web_listen_port }}"
+pushgateway_cmdline_options: []
+
+pushgateway_firewall_ports:
+  - "{{ pushgateway_web_listen_port }}/tcp"
+
+pushgateway_logrotate_config:
+  paths:
+    - "{{ pushgateway_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload pushgateway
+      endscript

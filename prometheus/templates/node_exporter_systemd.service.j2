@@ -1,0 +1,21 @@
+{%- set cmdline_options = node_exporter_cmdline_options|
+    reject('search', '--web.listen-address')|list
+-%}
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User={{ node_exporter_user }}
+Group={{ node_exporter_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ node_exporter_bin_path }}/node_exporter \
+    --web.listen-address={{ node_exporter_web_listen_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + node_exporter_log_path + '/' + 
+    node_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

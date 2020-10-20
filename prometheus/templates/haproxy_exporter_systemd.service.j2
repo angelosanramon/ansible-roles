@@ -1,0 +1,21 @@
+{%- set cmdline_options = haproxy_exporter_cmdline_options|
+    reject('search', '--web.listen-address')
+-%}
+[Unit]
+Description=HAProxy Exporter
+After=network.target
+
+[Service]
+User={{ haproxy_exporter_user }}
+Group={{ haproxy_exporter_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ haproxy_exporter_bin_path }}/haproxy_exporter \
+    --web.listen-address={{ haproxy_exporter_web_listen_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + haproxy_exporter_log_path + '/' + 
+    haproxy_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+---
+node_exporter_src_url: >-
+  https://github.com/prometheus/node_exporter/releases/download/v1.0.1/node_exporter-1.0.1.linux-amd64.tar.gz
+node_exporter_src_checksum: >-
+  3369b76cd2b0ba678b6d618deab320e565c3d93ccb5c2a0d5db51a53857768ae
+node_exporter_user: node_exporter
+node_exporter_group: node_exporter
+node_exporter_bin_path: /usr/local/bin
+node_exporter_log_path: /var/log/node_exporter
+node_exporter_log_file: node_exporter.log
+node_exporter_web_listen_port: 9100
+node_exporter_web_listen_address: "0.0.0.0:{{ node_exporter_web_listen_port }}"
+node_exporter_cmdline_options: []
+
+node_exporter_firewall_ports:
+  - "{{ node_exporter_web_listen_port }}/tcp"
+
+node_exporter_logrotate_config:
+  paths:
+    - "{{ node_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload node_exporter
+      endscript

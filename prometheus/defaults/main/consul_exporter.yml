@@ -1,0 +1,31 @@
+---
+consul_exporter_src_url: >-
+  https://github.com/prometheus/consul_exporter/releases/download/v0.7.1/consul_exporter-0.7.1.linux-amd64.tar.gz
+consul_exporter_src_checksum: >-
+  92ffd37fb5f2350df21e7a688c28e7bb2882c309f613400eafdc411c818ec048
+consul_exporter_user: consul_exporter
+consul_exporter_group: consul_exporter
+consul_exporter_bin_path: /usr/local/bin
+consul_exporter_log_path: /var/log/consul_exporter
+consul_exporter_log_file: consul_exporter.log
+consul_exporter_web_listen_port: 9107
+consul_exporter_web_listen_address: >-
+  0.0.0.0:{{ consul_exporter_web_listen_port }}
+consul_exporter_cmdline_options: []
+
+consul_exporter_firewall_ports:
+  - "{{ consul_exporter_web_listen_port }}/tcp"
+
+consul_exporter_logrotate_config:
+  paths:
+    - "{{ consul_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload consul_exporter
+      endscript

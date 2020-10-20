@@ -1,0 +1,77 @@
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: haproxy_exporter
+    firewall_ports: "{{ haproxy_exporter_firewall_ports }}"
+
+- name: create haproxy exporter user group
+  group:
+    name: '{{ haproxy_exporter_group }}'
+    state: present
+
+- name: create haproxy exporter user
+  user:
+    name: '{{ haproxy_exporter_user }}'
+    group: '{{ haproxy_exporter_group }}'
+    shell: /sbin/nologin
+
+- name: create haproxy exporter log directory
+  file:
+    path: '{{ haproxy_exporter_log_path }}'
+    state: directory
+    owner: '{{ haproxy_exporter_user }}'
+    group: '{{ haproxy_exporter_group }}'
+    mode: 0755
+
+- name: download haproxy exporter binary package
+  get_url:
+    url: '{{ haproxy_exporter_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ haproxy_exporter_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ haproxy_exporter_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress haproxy exporter binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy haproxy exporter binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/haproxy_exporter
+        dest: "{{ haproxy_exporter_bin_path }}/haproxy_exporter"
+        owner: "{{ haproxy_exporter_user }}"
+        group: "{{ haproxy_exporter_group }}"
+        mode: 0755
+        remote_src: yes
+  when: download_result is changed
+
+- name: create haproxy exporter systemd file
+  template:
+    src: haproxy_exporter_systemd.service.j2
+    dest: /etc/systemd/system/haproxy_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart haproxy_exporter
+
+- name: start haproxy_exporter
+  service:
+    name: haproxy_exporter
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: haproxy_exporter
+    logrotate_config: "{{ haproxy_exporter_logrotate_config }}"

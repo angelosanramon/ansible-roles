@@ -1,0 +1,26 @@
+{%- set cmdline_options = statsd_exporter_cmdline_options|
+    reject('search', '--web.listen-address')|
+    reject('search', '--statsd.listen-udp')|
+    reject('search', '--statsd.listen-tcp')|list
+-%}
+[Unit]
+Description=Statsd Exporter
+After=network.target
+
+[Service]
+User={{ statsd_exporter_user }}
+Group={{ statsd_exporter_group }}
+Type=simple
+ExecReload=/bin/sh -c '/bin/kill -HUP $(/bin/pidof statsd_exporter)'
+ExecStart=/bin/sh -c '{{ statsd_exporter_bin_path }}/statsd_exporter \
+    --web.listen-address={{ statsd_exporter_web_listen_address }} \
+    --statsd.listen-udp={{ statsd_exporter_statsd_listen_udp_address }} \
+    --statsd.listen-tcp={{ statsd_exporter_statsd_listen_tcp_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + statsd_exporter_log_path + '/' + 
+    statsd_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

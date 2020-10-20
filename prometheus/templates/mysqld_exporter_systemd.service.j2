@@ -1,0 +1,24 @@
+{%- set cmdline_options = mysqld_exporter_cmdline_options|
+    reject('search', '--web.listen-address')|
+    reject('search', '--config.my-cnf')|list
+-%}
+[Unit]
+Description=Mysqld Exporter
+After=network.target
+
+[Service]
+User={{ mysqld_exporter_user }}
+Group={{ mysqld_exporter_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ mysqld_exporter_bin_path }}/mysqld_exporter \
+    --web.listen-address={{ mysqld_exporter_web_listen_address }} \
+    --config.my-cnf={{ mysqld_exporter_config_path }}/{{ 
+    mysqld_exporter_mysql_file }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + mysqld_exporter_log_path + '/' + 
+    mysqld_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,5 @@
+- name: restart consul_exporter
+  service:
+    name: consul_exporter
+    state: restarted
+  listen: restart consul_exporter

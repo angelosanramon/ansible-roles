@@ -1,14 +1,6 @@
 - name: create consul logrotate config file
-  copy:
-    content: |
-      {% for path in consul_logrotate_config.paths %}
-      {{ path }}
-      {% endfor %}
-      {
-      {% for option in consul_logrotate_config.options %}
-      {{ option }}
-      {% endfor %}
-      }
+  template:
+    src: consul_logrotate.j2
     dest: /etc/logrotate.d/consul
     owner: root
     group: root

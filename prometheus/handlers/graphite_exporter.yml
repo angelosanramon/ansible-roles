@@ -1,0 +1,5 @@
+- name: restart graphite_exporter
+  service:
+    name: graphite_exporter
+    state: restarted
+  listen: restart graphite_exporter

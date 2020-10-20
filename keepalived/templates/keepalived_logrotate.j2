@@ -1,8 +1,6 @@
 {%- for path in keepalived_logrotate_config.paths -%}
-  {{- path + '\n' -}}
+  {{- path + '\n' -}}{{ '{\n' if loop.last else '' }}
 {%- endfor -%}
-{
-{% for option in keepalived_logrotate_config.options -%}
-  {{- ' '*4 + option + '\n' -}}
+{%- for option in keepalived_logrotate_config.options -%}
+  {{- ' '*4 + option|indent() + '\n' -}}{{ '}' if loop.last else '' }}
 {%- endfor -%}
-}

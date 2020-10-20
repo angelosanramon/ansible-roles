@@ -1,0 +1,43 @@
+---
+- name: install prometheus
+  include_tasks: prometheus_install.yml
+
+- name: install alertmanager
+  include_tasks: alertmanager_install.yml
+  when: prometheus_components.alertmanager.installed|default(false, true)
+
+- name: install node exporter
+  include_tasks: node_exporter_install.yml
+  when: prometheus_components.node_exporter.installed|default(false, true)
+
+- name: install blackbox exporter
+  include_tasks: blackbox_exporter_install.yml
+  when: prometheus_components.blackbox_exporter.installed|default(false, true)
+
+- name: install consul exporter
+  include_tasks: consul_exporter_install.yml
+  when: prometheus_components.consul_exporter.installed|default(false, true)
+
+- name: install graphite exporter
+  include_tasks: graphite_exporter_install.yml
+  when: prometheus_components.graphite_exporter.installed|default(false, true)
+
+- name: install haproxy exporter
+  include_tasks: haproxy_exporter_install.yml
+  when: prometheus_components.haproxy_exporter.installed|default(false, true)
+
+- name: install memcached exporter
+  include_tasks: memcached_exporter_install.yml
+  when: prometheus_components.memcached_exporter.installed|default(false, true)
+
+- name: install mysqld exporter
+  include_tasks: mysqld_exporter_install.yml
+  when: prometheus_components.mysqld_exporter.installed|default(false, true)
+
+- name: install statsd exporter
+  include_tasks: statsd_exporter_install.yml
+  when: prometheus_components.statsd_exporter.installed|default(false, true)
+
+- name: install pushgateway
+  include_tasks: pushgateway_install.yml
+  when: prometheus_components.pushgateway.installed|default(false, true)

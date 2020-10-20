@@ -1,0 +1,11 @@
+- name: restart statsd_exporter
+  service:
+    name: statsd_exporter
+    state: restarted
+  listen: restart statsd_exporter
+
+- name: reload statsd_exporter
+  service:
+    name: statsd_exporter
+    state: reloaded
+  listen: reload statsd_exporter

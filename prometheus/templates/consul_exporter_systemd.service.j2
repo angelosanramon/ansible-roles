@@ -1,0 +1,21 @@
+{%- set cmdline_options = consul_exporter_cmdline_options|
+    reject('search', '--web.listen-address')
+-%}
+[Unit]
+Description=Consul Exporter
+After=network.target
+
+[Service]
+User={{ consul_exporter_user }}
+Group={{ consul_exporter_group }}
+Type=simple
+ExecStart=/bin/sh -c '{{ consul_exporter_bin_path }}/consul_exporter \
+    --web.listen-address={{ consul_exporter_web_listen_address }} \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + consul_exporter_log_path + '/' + 
+    consul_exporter_log_file + ' 2>&1\'' }}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,39 @@
+---
+statsd_exporter_src_url: >-
+  https://github.com/prometheus/statsd_exporter/releases/download/v0.18.0/statsd_exporter-0.18.0.linux-amd64.tar.gz
+statsd_exporter_src_checksum: >-
+  d06793bd984a67e5cbead82b74e0a0f7bcd2518914ba243ab63ff8e8da532ca5
+statsd_exporter_user: statsd_exporter
+statsd_exporter_group: statsd_exporter
+statsd_exporter_bin_path: /usr/local/bin
+statsd_exporter_log_path: /var/log/statsd_exporter
+statsd_exporter_log_file: statsd_exporter.log
+statsd_exporter_web_listen_port: 9102
+statsd_exporter_web_listen_address: >-
+  0.0.0.0:{{ statsd_exporter_web_listen_port }}
+statsd_exporter_statsd_listen_udp_port: 9125
+statsd_exporter_statsd_listen_udp_address: >-
+  0.0.0.0:{{ statsd_exporter_statsd_listen_udp_port }}
+statsd_exporter_statsd_listen_tcp_port: 9125
+statsd_exporter_statsd_listen_tcp_address: >-
+  0.0.0.0:{{ statsd_exporter_statsd_listen_tcp_port }}
+statsd_exporter_cmdline_options: []
+
+statsd_exporter_firewall_ports:
+  - "{{ statsd_exporter_web_listen_port }}/tcp"
+  - "{{ statsd_exporter_statsd_listen_udp_port }}/udp"
+  - "{{ statsd_exporter_statsd_listen_tcp_port }}/tcp"
+
+statsd_exporter_logrotate_config:
+  paths:
+    - "{{ statsd_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload statsd_exporter
+      endscript

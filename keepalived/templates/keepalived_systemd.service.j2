@@ -1,3 +1,7 @@
+{%- set cmdline_options = keepalived_cmdline_options|default([], true)|
+    reject('search', '-f ')|reject('search', '--use-file=')|
+    reject('search', '-p ')|reject('search', '--pid=')|list
+-%}
 [Unit]
 Description=LVS and VRRP High Availability Monitor
 After=network-online.target syslog.target
@@ -7,13 +11,14 @@ Wants=network-online.target
 Type=forking
 PIDFile={{ keepalived_run_path + '/' + keepalived_pid_file }}
 KillMode=process
-ExecStart=/usr/local/sbin/keepalived -f {{ keepalived_config_path + '/' + 
-    keepalived_config_file }} -p {{ keepalived_run_path + '/' + 
-    keepalived_pid_file }} {{ keepalived_cmdline_options|
-    reject('search', '-f ')|reject('search', '--use-file=')|
-    reject('search', '-p ')|reject('search', '--pid=')|
-    join(' ') }}
 ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/local/sbin/keepalived \
+    -f {{ keepalived_config_path }}/{{ keepalived_config_file }} \
+    -p {{ keepalived_run_path }}/{{ keepalived_pid_file }}
+    {{- ' \\\n' if cmdline_options|length > 0 else '\n' -}}
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option }}{{ ' \\\n' if not loop.last else '\n' }}
+    {%- endfor -%}
 
 [Install]
 WantedBy=multi-user.target

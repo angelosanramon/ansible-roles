@@ -1,0 +1,5 @@
+- name: restart haproxy_exporter
+  service:
+    name: haproxy_exporter
+    state: restarted
+  listen: restart haproxy_exporter

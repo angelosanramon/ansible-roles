@@ -1,0 +1,77 @@
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+  vars:
+    prometheus_component: consul_exporter
+    firewall_ports: "{{ consul_exporter_firewall_ports }}"
+
+- name: create consul exporter user group
+  group:
+    name: '{{ consul_exporter_group }}'
+    state: present
+
+- name: create consul exporter user
+  user:
+    name: '{{ consul_exporter_user }}'
+    group: '{{ consul_exporter_group }}'
+    shell: /sbin/nologin
+
+- name: create consul exporter log directory
+  file:
+    path: '{{ consul_exporter_log_path }}'
+    state: directory
+    owner: '{{ consul_exporter_user }}'
+    group: '{{ consul_exporter_group }}'
+    mode: 0755
+
+- name: download consul exporter binary package
+  get_url:
+    url: '{{ consul_exporter_src_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ consul_exporter_src_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ consul_exporter_src_url|urlsplit('path')|basename }}
+
+- block:
+    - name: uncompress consul exporter binary package
+      unarchive:
+        src: /usr/local/src/{{ source_filename }}
+        dest: /usr/local/src
+        remote_src: yes
+
+    - set_fact:
+        dirname: "{{ source_filename.split('.')[:-2]|join('.') }}"
+
+    - name: copy consul exporter binary files
+      copy:
+        src: /usr/local/src/{{ dirname }}/consul_exporter
+        dest: "{{ node_exporter_bin_path }}/consul_exporter"
+        owner: "{{ consul_exporter_user }}"
+        group: "{{ consul_exporter_group }}"
+        mode: 0755
+        remote_src: yes
+  when: download_result is changed
+
+- name: create consul exporter systemd file
+  template:
+    src: consul_exporter_systemd.service.j2
+    dest: /etc/systemd/system/consul_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart consul_exporter
+
+- name: start consul_exporter
+  service:
+    name: consul_exporter
+    state: started
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
+  vars:
+    prometheus_component: consul_exporter
+    logrotate_config: "{{ consul_exporter_logrotate_config }}"

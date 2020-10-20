@@ -1,0 +1,32 @@
+{%- set cmdline_options = prometheus_cmdline_options|
+    reject('search', '--config.file')|
+    reject('search', '--storage.tsdb.path')|
+    reject('search', '--web.listen-address')|
+    reject('search', '--web.console.templates')|
+    reject('search', '--web.console.libraries')|list
+-%}
+[Unit]
+Description=Prometheus
+After=network.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecReload=/bin/sh -c '/bin/kill -HUP $(/bin/pidof prometheus)'
+ExecStart=/bin/sh -c '{{ prometheus_bin_path }}/prometheus \
+    --config.file={{ prometheus_config_path }}/{{ prometheus_config_file }} \
+    --storage.tsdb.path={{ prometheus_data_path }} \
+    --web.listen-address={{ prometheus_web_listen_address }} \
+    --web.console.templates={{ prometheus_config_path }}/consoles \
+    --web.console.libraries={{ prometheus_config_path }}/console_libraries \
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option + ' \\\n' }}
+    {%- endfor -%}
+    {{ '\n    >> ' + prometheus_log_path + '/' + 
+    prometheus_log_file + ' 2>&1\'' }}
+
+LimitNOFILE=65000
+
+[Install]
+WantedBy=multi-user.target

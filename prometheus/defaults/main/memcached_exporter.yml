@@ -1,0 +1,31 @@
+---
+memcached_exporter_src_url: >-
+  https://github.com/prometheus/memcached_exporter/releases/download/v0.7.0/memcached_exporter-0.7.0.linux-amd64.tar.gz
+memcached_exporter_src_checksum: >-
+  a8dec3f2493330159b02ab5f8916726d2d41d70170f23206b1987cdb450a839b
+memcached_exporter_user: memcached_exporter
+memcached_exporter_group: memcached_exporter
+memcached_exporter_bin_path: /usr/local/bin
+memcached_exporter_log_path: /var/log/memcached_exporter
+memcached_exporter_log_file: memcached_exporter.log
+memcached_exporter_web_listen_port: 9150
+memcached_exporter_web_listen_address: >-
+  0.0.0.0:{{ memcached_exporter_web_listen_port }}
+memcached_exporter_cmdline_options: []
+
+memcached_exporter_firewall_ports:
+  - "{{ memcached_exporter_web_listen_port }}/tcp"
+
+memcached_exporter_logrotate_config:
+  paths:
+    - "{{ memcached_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload memcached_exporter
+      endscript

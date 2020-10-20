@@ -1,0 +1,44 @@
+{%- set cmdline_options = alertmanager_cmdline_options|
+    reject('search', '--config.file')|
+    reject('search', '--web.listen-address')|
+    reject('search', '--storage.path')|list
+-%}
+{%- if groups[alertmanager_servers_group_name]|length > 1 -%}
+  {%- set cmdline_options = cmdline_options|
+      reject('search', '--cluster.listen-address')|
+      reject('search', '--cluster.advertise-address')|
+      reject('search', '--cluster.peer')|list
+  -%}
+  {{- cmdline_options.append('--cluster.listen-address=0.0.0.0:' + 
+    alertmanager_cluster_port|string) -}}
+  {{- cmdline_options.append('--cluster.advertise-address=' + ansible_host + ':'
+    + alertmanager_cluster_port|string) -}}
+  {%- for server in groups[alertmanager_servers_group_name] if 
+    server != inventory_hostname -%}
+    {{- cmdline_options.append('--cluster.peer=' +
+      hostvars[server].ansible_host + ':' +
+      alertmanager_cluster_port|string) -}}
+  {%- endfor -%}
+{%- endif -%}
+[Unit]
+Description=Alert Manager
+After=network.target
+
+[Service]
+User={{ alertmanager_user }}
+Group={{ alertmanager_group }}
+Type=simple
+ExecReload=/bin/sh -c '/bin/kill -HUP $(/bin/pidof alertmanager)'
+ExecStart=/bin/sh -c '{{ alertmanager_bin_path }}/alertmanager \
+    --config.file={{ alertmanager_config_path }}/{{ 
+    alertmanager_config_file }} \
+    --web.listen-address={{ alertmanager_web_listen_address }} \
+    --storage.path={{ alertmanager_data_path }} \
+    {% for option in cmdline_options %}
+      {{- option|indent(width=4,first=true) + ' \\\n' -}}
+    {% endfor %}
+    {{- '>> '|indent(width=4,first=true) + alertmanager_log_path + '/' + 
+    alertmanager_log_file + ' 2>&1\'\n' -}}
+
+[Install]
+WantedBy=multi-user.target

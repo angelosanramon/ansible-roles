@@ -1,0 +1,87 @@
+---
+prometheus_src_url: >-
+  https://github.com/prometheus/prometheus/releases/download/v2.22.0/prometheus-2.22.0.linux-amd64.tar.gz
+prometheus_src_checksum: >-
+  b9894d2bf7fae235c924c7dadda0fbc214ffc18a2bb3e9306f6fbecb589d5263
+prometheus_user: prometheus
+prometheus_group: prometheus
+prometheus_config_path: /etc/prometheus
+prometheus_config_file: prometheus.yml
+prometheus_data_path: /var/lib/prometheus
+prometheus_log_path: /var/log/prometheus
+prometheus_log_file: prometheus.log
+prometheus_log_query_file: prometheus-query.log
+prometheus_bin_path: /usr/local/bin
+prometheus_certs_path: "{{ prometheus_config_path }}/tls"
+prometheus_web_listen_port: 9090
+prometheus_web_listen_address: "0.0.0.0:{{ prometheus_web_listen_port }}"
+prometheus_servers_group_name: prometheus_servers
+prometheus_cmdline_options: []
+
+prometheus_global_config:
+  scrape_interval: 10s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  query_log_file: "{{ prometheus_log_path }}/{{ prometheus_log_query_file }}"
+
+prometheus_rule_files_config:
+  - "{{ prometheus_config_path }}/rules/*.rules"
+
+prometheus_scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: >-
+          {%- set servers = [] -%}
+          {%- for server in groups[prometheus_servers_group_name] -%}
+            {{- servers.append(server + ':' + prometheus_listen_port|string) -}}
+          {%- endfor-%}
+          {{- servers -}}
+
+prometheus_alert_relabel_configs: []
+
+prometheus_alertmanager_config: []
+
+prometheus_remote_write_config: []
+
+prometheus_remote_read_config: []   
+
+prometheus_alert_rules: []
+
+prometheus_components:
+  alertmanager:
+    installed: false
+  node_exporter:
+    installed: false
+  blackbox_exporter:
+    installed: false
+  consul_exporter:
+    installed: false
+  graphite_exporter:
+    installed: false
+  haproxy_exporter:
+    installed: false
+  memcached_exporter:
+    installed: false
+  mysqld_exporter:
+    installed: false
+  pushgateway:
+    installed: false
+  statsd_exporter:
+    installed: false
+
+prometheus_firewall_ports:
+  - "{{ prometheus_web_listen_port }}/tcp"
+
+prometheus_logrotate_config:
+  paths:
+    - "{{ prometheus_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload prometheus
+      endscript

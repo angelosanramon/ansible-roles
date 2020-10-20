@@ -1,0 +1,5 @@
+- name: restart pushgateway
+  service:
+    name: pushgateway
+    state: restarted
+  listen: restart pushgateway

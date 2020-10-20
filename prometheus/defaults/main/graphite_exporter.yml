@@ -1,0 +1,39 @@
+---
+graphite_exporter_src_url: >-
+  https://github.com/prometheus/graphite_exporter/releases/download/v0.9.0/graphite_exporter-0.9.0.linux-amd64.tar.gz
+graphite_exporter_src_checksum: >-
+  8da5bf07180f345abbd0e3c5ddf0f2bd319d930b6f9dd0385f4cfebdc6815c86
+graphite_exporter_user: graphite_exporter
+graphite_exporter_group: graphite_exporter
+graphite_exporter_config_path: /etc/graphite_exporter
+graphite_exporter_config_file: graphite_mapping.conf
+graphite_exporter_bin_path: /usr/local/bin
+graphite_exporter_log_path: /var/log/graphite_exporter
+graphite_exporter_log_file: graphite_exporter.log
+graphite_exporter_web_listen_port: 9108
+graphite_exporter_graphite_listen_port: 9109
+graphite_exporter_web_listen_address: >-
+  0.0.0.0:{{ graphite_exporter_web_listen_port }}
+graphite_exporter_graphite_listen_address: >-
+  0.0.0.0:{{ graphite_exporter_graphite_listen_port }}
+graphite_exporter_cmdline_options: []
+
+graphite_exporter_mappings_config: []
+
+graphite_exporter_firewall_ports:
+  - "{{ graphite_exporter_web_listen_port }}/tcp"
+  - "{{ graphite_exporter_graphite_listen_port }}/tcp"
+
+graphite_exporter_logrotate_config:
+  paths:
+    - "{{ graphite_exporter_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload graphite_exporter
+      endscript

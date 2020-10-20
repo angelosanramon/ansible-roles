@@ -7,10 +7,12 @@ keepalived_run_path: /run/keepalived
 keepalived_pid_file: keepalived.pid
 keepalived_log_path: /var/log/keepalived
 keepalived_log_file: keepalived.log
+keepalived_log_error_file: keepalived-error.log
 keepalived_servers_group_name: keepalived_servers
 keepalived_cmdline_options:
   - --log-facility=0
   - --log-detail
+  - --log-console
 
 keepalived_configs:
   global_defs:
@@ -77,9 +79,10 @@ keepalived_logrotate_config:
     - rotate 7
     - dateext
     - copytruncate
-    - "{{- 'postrotate' + '\n' + ' '*8 + 
-        '/usr/bin/systemctl reload keepalived' + 
-        '\n' + ' '*4 + 'endscript' -}}"
+    - |-
+      postrotate
+          /usr/bin/systemctl reload keepalived
+      endscript
 
 keepalived_syslog_config:
   - facility_code: local0
