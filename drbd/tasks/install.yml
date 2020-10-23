@@ -1,0 +1,99 @@
+- set_fact:
+    drbd_fname: >-
+      {{- (drbd_pkg_url|urlsplit('path')|basename).split('-')[:2]|join('-') -}}
+    drbd_util_fname: >-
+      {{- (drbd_util_pkg_url|urlsplit('path')|basename).split('-')[:2]|
+      join('-') -}}
+
+- name: check if drbd is already installed
+  shell: >-
+    dnf list {{ drbd_fname }}
+  args:
+    warn: false
+  register: drdb_check
+  failed_when:
+    - drdb_check.rc != 0
+    - "'No matching Packages' not in drdb_check.stderr"
+  changed_when: false
+
+- name: check if drbd util is already installed
+  shell: >-
+    dnf list {{ drbd_util_fname }}
+  args:
+    warn: false
+  register: drdb_util_check
+  failed_when:
+    - drdb_util_check.rc != 0
+    - "'No matching Packages' not in drdb_util_check.stderr"
+  changed_when: false
+
+- name: install drbd
+  shell: >-
+    dnf install -y {{ drbd_pkg_url }}
+  args:
+    warn: false
+  register: drbd_install
+  when:
+    - drdb_check.rc != 0
+    - "'No matching Packages' in drdb_check.stderr"
+
+- name: install drbd util
+  shell: >-
+    dnf install -y {{ drbd_util_pkg_url }}
+  args:
+    warn: false
+  when:
+    - drdb_util_check.rc != 0
+    - "'No matching Packages' in drdb_util_check.stderr"
+
+- name: create drbd scripts directory
+  file:
+    path: '{{ drdb_script_path }}'
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: create drbd global config file
+  template:
+    src: global_common.conf.j2
+    dest: /etc/drbd.d/global_common.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload drbd
+
+- name: create drbd resources config file
+  template:
+    src: resources.res.j2
+    dest: /etc/drbd.d/resources.res
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload drbd
+
+- name: reboot after drbd install
+  reboot:
+  when: drbd_install is changed
+
+- name: create resources
+  include_tasks: create_resource.yml
+  with_items: "{{ drbd_resources_conf }}"
+  loop_control:
+    loop_var: resource
+
+- name: create promote scripts
+  template:
+    src: promote_to_primary.sh.j2
+    dest: "{{ drdb_script_path }}/promote_to_primary.sh"
+    owner: root
+    group: root
+    mode: 0744
+
+- name: create demote scripts
+  template:
+    src: demote_to_secondary.sh.j2
+    dest: "{{ drdb_script_path }}/demote_to_secondary.sh"
+    owner: root
+    group: root
+    mode: 0744

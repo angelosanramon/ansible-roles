@@ -1,0 +1,40 @@
+{%- set resource_sub_sections = ['on', 'startup', 'options', 'handlers', 
+'net', 'volume', 'connection-mesh', 'connection'] -%}
+{% if drbd_resources_conf|default([], true)|length > 0 %}
+  {%- for resource in drbd_resources_conf -%}
+    {{- 'resource ' + resource.name + ' {\n' -}}
+      {%- for key, value in resource.items() if key != 'name' -%}
+        {%- if key in resource_sub_sections -%}
+          {%- if key == 'on' -%}
+            {%- for item in value -%}
+              {{- 'on '|indent(width=2,first=true) + item.name + ' {\n' -}}
+                {%- for sub_key, sub_value in item.items() if 
+                sub_key != 'name' -%}
+                  {{- sub_key|string|indent(width=4,first=true) + ' ' +
+                  sub_value|default('')|string + ';\n'  -}}
+                {%- endfor -%}
+              {{- '}'|indent(width=2,first=true) + '\n' -}}
+            {%- endfor -%}
+          {%- elif key == 'connection' -%}
+            {{- 'connection {\n'|indent(width=2,first=true) -}}
+              {%- for item in value -%}
+                {{- "host %s address %s;\n"|format(item.host,item.address)|
+                indent(width=4,first=true) -}}
+              {%- endfor -%}
+            {{- '}'|indent(width=2,first=true) + '\n' -}}
+          {%- else -%}
+            {{- key|indent(width=2,first=true) + ' {\n' -}}
+              {%- for sub_key, sub_value in value.items() -%}
+                {{- sub_key|string|indent(width=4,first=true) + ' ' +
+                sub_value|default('')|string + ';\n' -}}
+              {%- endfor -%}
+            {{- '}'|indent(width=2,first=true) + '\n' -}}
+          {%- endif -%}
+        {%- else -%}
+          {{- key|indent(width=2,first=true) + ' ' + value|default('')|
+          string + ';\n' -}}
+        {%- endif -%}
+      {%- endfor -%}
+    {{- '}\n' -}}
+  {%- endfor -%}
+{%- endif -%}

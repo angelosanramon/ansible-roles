@@ -1,0 +1,23 @@
+- name: create drbd cluster
+  hosts: drbd_servers
+  become: yes
+  roles:
+    - name: chrony
+    - name: drbd
+      vars:
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            net:
+              verify-alg: sha256
+            'on':
+              - name: drbd1.cluster.local
+                node-id: 0
+                address: 192.168.1.70:7788
+              - name: drbd2.cluster.local
+                node-id: 1
+                address: 192.168.1.71:7788
+            connection-mesh:
+              hosts: drbd1.cluster.local drbd2.cluster.local

@@ -1,0 +1,6 @@
+/sbin/drbdadm primary --force all
+
+# Post promote script
+if [ -f "{{drdb_script_path}}/post_demote.sh" ]; then
+    source "{{drdb_script_path}}/post_promote.sh"
+fi

@@ -1,0 +1,113 @@
+---
+drbd_pkg_url: https://elrepo.org/linux/elrepo/el8/x86_64/RPMS/kmod-drbd90-9.0.23-1.el8_2.elrepo.x86_64.rpm
+drbd_util_pkg_url: https://elrepo.org/linux/elrepo/el8/x86_64/RPMS/drbd90-utils-9.13.1-1.el8.elrepo.x86_64.rpm
+drdb_log_path: /var/log/drbd
+drbd_log_file: drbd.log
+drdb_script_path: /etc/drbd.d/scripts
+drbd_servers_group_name: drbd_servers
+drbd_listen_ports: 7788-7799
+drdb_global_conf:
+  usage-count: 'yes'
+# drdb_global_conf:
+#   minor-count: count (1 to 1048575)
+#   dialog-refresh: time (seconds)
+#   disable-ip-verification:
+
+drbd_common_conf:
+  startup:
+    wfc-timeout: 30
+  net:
+    protocol: C
+# drbd_common_conf:
+#   startup:
+#     wfc-timeout: timeout (seconds)
+#     degr-wfc-timeout: timeout (seconds)
+#     outdated-wfc-timeout: timeout (seconds)
+#     wait-after-sb:
+#     stacked-timeouts:
+#     become-primary-on:
+#   options:
+#     cpu-mask: cpu-affinity-mask (hex)
+#     on-no-data-accessible: io-error|suspend-io
+#   handlers:
+#     pri-on-incon-degr: cmd
+#     pri-lost-after-sb: cmd
+#     pri-lost: cmd
+#     fence-peer: cmd
+#     local-io-error: cmd
+#     initial-split-brain: cmd
+#     split-brain: cmd
+#     before-resync-target: cmd
+#     after-resync-target: cmd
+#   net:
+#     protocol: A|B|C
+#     sndbuf-size: bytes (up to 10MiB)
+#     rcvbuf-size: bytes (up to 10MiB)
+#     timeout: time (seconds)
+#     connect-int: time (seconds)
+#     ping-int: interval (seconds)
+#     ping-timeout: timeout (tenths of a second)
+#     max-buffers: number (page size)
+#     max-epoch-size: number (1-20000)
+#     ko-count: number
+#     allow-two-primaries:
+#     cram-hmac-alg: hash-algorithm
+#     shared-secret: secret
+#     after-sb-0pri: disconnect|discard-younger-primary|discard-older-primary|
+#                    discard-zero-changes|discard-least-changes|
+#                    discard-node-nodename
+#     after-sb-1pri: disconnect|consensus|violently-as0p|discard-secondary|
+#                    call-pri-lost-after-sb
+#     after-sb-2pri: disconnect|violently-as0p|call-pri-lost-after-sb
+#     data-integrity-alg: algorithm
+#     no-tcp-cork: 
+#     on-congestion: policy
+#     congestion-fill: threshold
+#     congestion-extents: threshold
+#     verify-alg: hash-algorithm
+#     use-rle:
+#     csums-alg: hash-algorithm
+#     socket-check-timeout: timeout
+#   disk:
+#     on-io-error: pass_on|call-local-io-error|detach
+#     size:
+#     fencing: dont-care|resource-only|resource-and-stonith
+#     disk-barrier:
+#     disk-flushes:
+#     disk-drain:
+#     md-flushes: 
+#     max-bio-bvecs:
+#     resync-rate: rate
+#     resync-after: res-name/volume
+#     al-extents: extents
+#     al-updates: yes|no
+#     c-plan-ahead: plan_time
+#     c-fill-target: fill_target
+#     c-delay-target: delay_target
+#     c-max-rate: max_rate
+#     c-min-rate: min_rate
+#     disk-timeout: 
+#     discard-zeroes-if-aligned: yes|no
+#     rs-discard-granularity: byte
+#     read-balancing: policy
+
+drbd_resources_conf: []
+# drbd_resources_conf:
+#   - name: drbd1
+#     meta-disk: internal
+#     device: /dev/drbd1
+#     disk: /dev/sdb1
+#     net:
+#       verify-alg: sha256
+#     'on':
+#       - name: drbd1.cluster.local
+#         node-id: 0
+#         address: 192.168.1.70:7788
+#       - name: drbd2.cluster.local
+#         node-id: 1
+#         address: 192.168.1.71:7788
+#     connection-mesh:
+#       hosts: drbd1.cluster.local drbd2.cluster.local
+
+drbd_firewall_ports:
+  - "{{ drbd_listen_ports }}/tcp"

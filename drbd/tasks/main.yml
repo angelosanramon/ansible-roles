@@ -1,0 +1,9 @@
+---
+- name: add drbd servers to hosts file
+  include_tasks: hostsfile.yml
+
+- name: install drbd
+  include_tasks: install.yml
+
+- name: enable firewall
+  include_tasks: firewalld.yml

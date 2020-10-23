@@ -1,0 +1,21 @@
+devices=({{ drbd_resources_conf|map(attribute='device')|join(' ') }})
+
+# Unmount devices first
+for device in "${devices[@]}"; do
+    /bin/mount | grep -w $device  > /dev/null
+    if [ $? -eq 0 ]; then
+        cd
+        /bin/umount $device
+        if [ $? -ne 0 ]; then
+          /bin/umount --force $device
+        fi
+    fi
+done
+
+# Demote all devices to secondary
+/sbin/drbdadm secondary all
+
+# Post demote script
+if [ -f "{{drdb_script_path}}/post_demote.sh" ]; then
+    source "{{drdb_script_path}}/post_demote.sh"
+fi

@@ -1,0 +1,30 @@
+- name: check if resource is already exist
+  shell: /sbin/drbdadm --force dump-md {{ resource.name }}
+  register: check_resource
+  failed_when:
+    - check_resource.rc != 0
+    - "'No valid meta data found' not in check_resource.stderr"
+  changed_when: false
+
+- set_fact:
+    resource_exist: >-
+      {{- check_resource.rc == 0|ternary(true, false) -}}
+
+- name: create resource
+  shell: /sbin/drbdadm create-md {{ resource.name }}
+  register: create_resource
+  when: not resource_exist
+
+- block:
+    - name: start resource
+      shell: >-
+        /sbin/drbdadm down {{ resource.name }} && 
+        /sbin/drbdadm up {{ resource.name }}
+      register: start_resource
+
+    - name: set primary
+      include_tasks: set_primary.yml
+      with_items: "{{ drbd_resources_conf }}"
+      loop_control:
+        loop_var: inner_loop_resource
+  when: create_resource is changed

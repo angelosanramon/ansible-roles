@@ -1,0 +1,19 @@
+{% if drdb_global_conf|default({}, true)|length > 0 %}
+global {
+  {%- for key, value in drdb_global_conf.items() -%}
+    {{- '\n' + key|indent(width=2, first=true) + ' ' + value|string + ';\n' -}}
+  {%- endfor -%}
+}
+{% endif %}
+{% if drbd_common_conf|default({}, true)|length > 0 %}
+common {
+  {%- for key, value in drbd_common_conf.items() %}
+    {{- '\n' + key|indent(width=2,first=true) + ' {\n' -}}
+      {% for sub_key, sub_value in value.items() %}
+        {{- sub_key|indent(width=4,first=true) + ' ' + 
+        sub_value|default('',true)|string + ';\n' -}}
+      {% endfor %}
+    {{- '  }\n' -}}
+  {% endfor %}
+}
+{% endif %}
