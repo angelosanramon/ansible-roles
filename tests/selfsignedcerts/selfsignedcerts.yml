@@ -1,0 +1,18 @@
+---
+- name: create self signed certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - selfsignedcerts
+  vars:
+    selfsignedcerts_server_certificates:
+      - common_name: test1.cluster.local
+        subject_alt_names:
+          - DNS:localhost
+          - IP:192.168.1.50
+          - IP:127.0.0.1
+      - common_name: test2.cluster.local
+        subject_alt_names:
+          - DNS:localhost
+          - IP:192.168.1.51
+          - IP:127.0.0.1

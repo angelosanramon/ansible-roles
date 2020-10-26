@@ -1,0 +1,52 @@
+- set_fact:
+    server_certificate_path: >-
+      {{- selfsignedcerts_certs_path + '/' + server_certificate.common_name -}}
+    ca_certificate_path: "{{ selfsignedcerts_certs_path }}/ca"
+
+- name: create {{ server_certificate.common_name }} certificates directory
+  file:
+    path: "{{ server_certificate_path }}"
+    state: directory
+    mode: 0755
+
+- name: generate {{ server_certificate.common_name }} private key
+  openssl_privatekey:
+    path: >-
+      {{ server_certificate_path }}/{{ server_certificate.common_name }}.key
+    size: 4096
+
+- name: generate csr for {{ server_certificate.common_name }} certificate
+  openssl_csr:
+    common_name: "{{ server_certificate.common_name }}"
+    subject_alt_name: >-
+      {{- server_certificate.subject_alt_names|default(omit, true) -}}
+    email_address: >-
+      {{- server_certificate.email_address|default(omit, true) -}}
+    locality_name: >-
+      {{- server_certificate.locality_name|default(omit, true) -}}
+    state_or_province_name: >-
+      {{- server_certificate.state_or_province_name|default(omit, true) -}}
+    country_name: >-
+      {{- server_certificate.country_name|default(omit, true) -}}
+    organization_name: >-
+      {{- server_certificate.organization_name|default(omit, true) -}}
+    organizational_unit_name: >-
+      {{- server_certificate.organizational_unit_name|default(omit, true) -}}
+    privatekey_passphrase: >-
+      {{- server_certificate.privatekey_passphrase|default(omit, true) -}}
+    path: >-
+      {{ server_certificate_path }}/{{ server_certificate.common_name }}.csr
+    privatekey_path: >-
+      {{ server_certificate_path }}/{{ server_certificate.common_name }}.key
+
+- name: generate {{ server_certificate.common_name }} certificate
+  openssl_certificate:
+    path: >-
+      {{ server_certificate_path }}/{{ server_certificate.common_name }}.crt
+    csr_path: >-
+      {{ server_certificate_path }}/{{ server_certificate.common_name }}.csr
+    ownca_path: >-
+      {{ ca_certificate_path }}/ca.crt
+    ownca_privatekey_path: >-
+      {{ ca_certificate_path }}/ca.key
+    provider: ownca

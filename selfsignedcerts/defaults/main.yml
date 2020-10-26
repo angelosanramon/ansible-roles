@@ -1,0 +1,25 @@
+selfsignedcerts_certs_path: self_signed_certs
+selfsignedcerts_ca_common_name: myrootca.com
+# selfsignedcerts_ca_subject_alt_name: []
+# selfsignedcerts_ca_email_address: email@myrootca.com
+# selfsignedcerts_ca_locality_name: MyCity
+# selfsignedcerts_ca_state_or_province_name: MyState
+# selfsignedcerts_ca_country_name: MyCountry
+# selfsignedcerts_ca_organization_name: MyOrg
+# selfsignedcerts_ca_organizational_unit_name: MyDept
+# selfsignedcerts_ca_privatekey_passphrase: MyPassword
+
+selfsignedcerts_server_certificates: []
+# selfsignedcerts_server_certificates:
+#       - common_name: test1.cluster.local
+#         subject_alt_names:
+#           - DNS:localhost
+#           - IP:192.168.1.50
+#           - IP:127.0.0.1
+#         email_address: email@example.com
+#         locality_name: MyCity
+#         state_or_province_name: MyState
+#         country_name: MyCountry
+#         organization_name: MyOrg
+#         organizational_unit_name: MyDept
+#         privatekey_passphrase: MyPassword

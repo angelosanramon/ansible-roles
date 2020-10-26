@@ -1,0 +1,8 @@
+- name: generate CA certificate
+  include_tasks: generate_ca_certificate.yml
+
+- name: generate servers certificates
+  include_tasks: generate_server_certificate.yml
+  with_items: "{{ selfsignedcerts_server_certificates }}"
+  loop_control:
+    loop_var: server_certificate

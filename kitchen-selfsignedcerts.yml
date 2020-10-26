@@ -3,7 +3,6 @@ driver:
   name: vagrant
   customize:
     memory: 1024
-    natdnshostresolver1: 'on'
 
 provisioner:
   name: shell
@@ -16,13 +15,14 @@ suites:
     provisioner:
       name: ansible_playbook
       roles_path: .
-      ansible_inventory: tests/letsencrypt/inventory
-      playbook: tests/letsencrypt/test.yml
+      #ansible_inventory: tests/selfsignedcerts/inventory
+      hosts: myhost
+      playbook: tests/selfsignedcerts/selfsignedcerts.yml
       ansible_playbook_command: >-
         ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant"
         --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
-        -o StrictHostKeyChecking=no" -i /tmp/kitchen/inventory
-        /tmp/kitchen/test.yml
+        -o StrictHostKeyChecking=no" -i localhost
+        /tmp/kitchen/selfsignedcerts.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:

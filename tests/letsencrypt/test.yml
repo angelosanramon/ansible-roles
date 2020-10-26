@@ -4,3 +4,16 @@
   become: yes
   roles:
     - letsencrypt
+  vars:
+    acme_email: email@example.com
+    aws_access_key: my_aws_access_key
+    aws_secret_key: my_aws_secret_key
+    route53_zone: example.com
+    certificates:
+      - common_name: example.com
+        subject_alt_name: 
+          - consul.example.com
+          - vault.example.com
+          - prometheus.example.com
+          - alertmanager.example.com
+        valid_days: 7

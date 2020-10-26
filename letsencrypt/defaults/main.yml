@@ -6,7 +6,7 @@ acme_environment: staging
 acme_staging_directory: https://acme-staging-v02.api.letsencrypt.org/directory
 acme_production_directory: https://acme-v02.api.letsencrypt.org/directory
 
-certs_path: certs
+certs_path: letsencrypt_certs
 certificates: []
 # certificates:
 #   - common_name: example.com

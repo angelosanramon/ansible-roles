@@ -1,0 +1,43 @@
+- name: create CA certificates directory
+  file:
+    path: "{{ selfsignedcerts_certs_path }}/ca"
+    state: directory
+    mode: 0755
+
+- name: generate CA private key
+  openssl_privatekey:
+    path: "{{ selfsignedcerts_certs_path }}/ca/ca.key"
+    size: 4096
+
+- name: generate csr for CA certificate
+  openssl_csr:
+    common_name: "{{ selfsignedcerts_ca_common_name }}"
+    subject_alt_name: >-
+      {{- selfsignedcerts_ca_subject_alt_names|default(omit, true) -}}
+    email_address: >-
+      {{- selfsignedcerts_ca_email_address|default(omit, true) -}}
+    locality_name: >-
+      {{- selfsignedcerts_ca_locality_name|default(omit, true) -}}
+    state_or_province_name: >-
+      {{- selfsignedcerts_ca_state_or_province_name|default(omit, true) -}}
+    country_name: >-
+      {{- selfsignedcerts_ca_country_name|default(omit, true) -}}
+    organization_name: >-
+      {{- selfsignedcerts_ca_organization_name|default(omit, true) -}}
+    organizational_unit_name: >-
+      {{- selfsignedcerts_ca_organizational_unit_name|default(omit, true) -}}
+    privatekey_passphrase: >-
+      {{- selfsignedcerts_ca_privatekey_passphrase|default(omit, true) -}}
+    path: >-
+      {{- selfsignedcerts_certs_path + '/ca/ca.csr' -}}
+    privatekey_path: >-
+      {{- selfsignedcerts_certs_path + '/ca/ca.key' -}}
+    basic_constraints: 
+      - "CA:TRUE"
+
+- name: generate CA certificate
+  openssl_certificate:
+    path: "{{ selfsignedcerts_certs_path }}/ca/ca.crt"
+    privatekey_path: "{{ selfsignedcerts_certs_path }}/ca/ca.key"
+    csr_path: "{{ selfsignedcerts_certs_path }}/ca/ca.csr"
+    provider: selfsigned
