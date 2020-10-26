@@ -86,3 +86,9 @@
     group: '{{ consul_group }}'
     mode: 0640
   notify: restart consul
+
+- name: start consul
+  service:
+    name: consul
+    enabled: yes
+    state: started

@@ -128,6 +128,7 @@
 - name: start prometheus
   service:
     name: prometheus
+    enabled: yes
     state: started
 
 - name: configure logrotate

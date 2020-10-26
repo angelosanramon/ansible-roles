@@ -68,6 +68,7 @@
 - name: start memcached_exporter
   service:
     name: memcached_exporter
+    enabled: yes
     state: started
 
 - name: configure logrotate

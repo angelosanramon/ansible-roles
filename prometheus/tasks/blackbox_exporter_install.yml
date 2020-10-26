@@ -88,6 +88,7 @@
 - name: start blackbox_exporter
   service:
     name: blackbox_exporter
+    enabled: yes
     state: started
 
 - name: configure logrotate

@@ -8,10 +8,10 @@ provisioner:
   name: shell
 
 platforms:
-  - name: bento/centos-8
+  - name: centos/8
 
 suites:
-  - name: drbd1
+  - name: prometheus1
     provisioner:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
@@ -20,24 +20,24 @@ suites:
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
     driver_config:
-      vm_hostname: drbd1.cluster.local
+      vm_hostname: prometheus1.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.70"}]
+        - ["private_network", {ip: "192.168.1.80"}]
       customize:
         memory: 1024
         createhd:
           - filename: /tmp/drbd1.vdi
             size: 10240
         storagectl:
-          - name: SATA Controller
+          - name: IDE
             portcount: 2
         storageattach:
-          - storagectl: SATA Controller
+          - storagectl: IDE
             port: 1
             device: 0
             type: hdd
             medium: /tmp/drbd1.vdi
-  - name: drbd2
+  - name: prometheus2
     provisioner:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
@@ -46,19 +46,19 @@ suites:
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
     driver_config:
-      vm_hostname: drbd2.cluster.local
+      vm_hostname: prometheus2.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.71"}]
+        - ["private_network", {ip: "192.168.1.81"}]
       customize:
         memory: 1024
         createhd:
           - filename: /tmp/drbd2.vdi
             size: 10240
         storagectl:
-          - name: SATA Controller
+          - name: IDE
             portcount: 2
         storageattach:
-          - storagectl: SATA Controller
+          - storagectl: IDE
             port: 1
             device: 0
             type: hdd
@@ -67,16 +67,17 @@ suites:
     provisioner:
       name: ansible_playbook
       roles_path: .
-      ansible_inventory: tests/drbd/inventory
-      playbook: tests/drbd/drbd.yml
+      ansible_inventory: tests/prometheus/inventory-prometheus-drbd
+      playbook: tests/prometheus/prometheus-drbd.yml
       ansible_playbook_command: >-
         ansible-playbook -e "ansible_user=vagrant 
         ansible_password=vagrant" --ssh-extra-args="-o ConnectTimeout=10 -o 
         ConnectionAttempts=60 -o StrictHostKeyChecking=no" -i 
-        /tmp/kitchen/inventory /tmp/kitchen/drbd.yml
+        /tmp/kitchen/inventory-prometheus-drbd
+        /tmp/kitchen/prometheus-drbd.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:
       vm_hostname: ansible.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.72"}]
+        - ["private_network", {ip: "192.168.1.82"}]

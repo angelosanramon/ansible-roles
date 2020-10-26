@@ -92,4 +92,5 @@
 - name: start haproxy
   service:
     name: haproxy
+    enabled: yes
     state: started

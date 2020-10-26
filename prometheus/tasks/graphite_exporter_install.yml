@@ -88,6 +88,7 @@
 - name: start graphite_exporter
   service:
     name: graphite_exporter
+    enabled: yes
     state: started
 
 - name: configure logrotate

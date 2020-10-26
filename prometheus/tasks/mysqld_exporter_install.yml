@@ -86,6 +86,7 @@
 - name: start mysqld_exporter
   service:
     name: mysqld_exporter
+    enabled: yes
     state: started
 
 - name: configure logrotate

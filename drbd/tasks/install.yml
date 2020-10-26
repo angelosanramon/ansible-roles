@@ -97,3 +97,9 @@
     owner: root
     group: root
     mode: 0744
+
+- name: start drbd
+  service:
+    name: drbd
+    enabled: yes
+    state: started

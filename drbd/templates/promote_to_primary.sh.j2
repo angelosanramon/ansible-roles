@@ -1,6 +1,18 @@
+#!/bin/bash
+
+if [ "$(/sbin/drbdadm role all)" == "Primary" ]; then
+    echo "Already in the primary role."
+    exit 0
+fi
+
+# Before promote script
+if [ -f "{{drdb_script_path}}/pre_promote.sh" ]; then
+    source "{{drdb_script_path}}/pre_promote.sh"
+fi
+
 /sbin/drbdadm primary --force all
 
 # Post promote script
-if [ -f "{{drdb_script_path}}/post_demote.sh" ]; then
+if [ -f "{{drdb_script_path}}/post_promote.sh" ]; then
     source "{{drdb_script_path}}/post_promote.sh"
 fi

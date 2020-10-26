@@ -9,5 +9,6 @@
 - name: start firewalld
   service:
     name: firewalld
+    enabled: yes
     state: started
 

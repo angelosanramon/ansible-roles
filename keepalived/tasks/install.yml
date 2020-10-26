@@ -16,6 +16,7 @@
     - "{{ keepalived_config_path }}"
     - "{{ keepalived_run_path }}"
     - "{{ keepalived_log_path }}"
+    - "{{ keepalived_config_path }}/scripts"
 
 - name: download keepalived source file
   get_url:
@@ -60,9 +61,10 @@
     owner: 'root'
     group: 'root'
     mode: 0644
-  notify: restart keepalived
+  notify: reload keepalived
 
 - name: start keepalived
   service:
     name: keepalived
+    enabled: yes
     state: started

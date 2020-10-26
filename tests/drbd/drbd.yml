@@ -12,6 +12,7 @@
             disk: /dev/sdb1
             net:
               verify-alg: sha256
+              #allow-two-primaries: 'yes'
             'on':
               - name: drbd1.cluster.local
                 node-id: 0

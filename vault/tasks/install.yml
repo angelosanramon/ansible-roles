@@ -80,3 +80,9 @@
     group: '{{ vault_group }}'
     mode: 0640
   notify: restart vault
+
+- name: start vault
+  service:
+    name: vault
+    enabled: yes
+    state: started
