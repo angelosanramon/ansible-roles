@@ -1,0 +1,63 @@
+- name: download grafana binary package
+  get_url:
+    url: '{{ grafana_pkg_url }}'
+    dest: /usr/local/src
+    checksum: 'sha256:{{ grafana_pkg_checksum }}'
+  register: download_result
+
+- set_fact:
+    source_filename: >-
+      {{ grafana_pkg_url|urlsplit('path')|basename }}
+
+- name: install grafana
+  dnf:
+    name: /usr/local/src/{{ source_filename }}
+    state: present
+    disable_gpg_check: yes
+
+- name: create grafana directories
+  file:
+    path: '{{ item.path }}'
+    state: directory
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+  with_items:
+    - { path: '{{ grafana_data_path }}',
+        user: '{{ grafana_user }}',
+        group: '{{ grafana_group }}',
+        mode: '0755' }
+    - { path: '{{ grafana_cert_path }}',
+        user: '{{ grafana_user }}',
+        group: '{{ grafana_group }}',
+        mode: '0755' }
+    - { path: '{{ grafana_log_path }}',
+        user: '{{ grafana_user }}',
+        group: '{{ grafana_group }}',
+        mode: '0755' }
+
+- name: create prometheus systemd file
+  template:
+    src: grafana-server_systemd.service.j2
+    dest: /usr/lib/systemd/system/grafana-server.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    #- restart grafana
+
+- name: create grafana config file
+  template:
+    src: grafana.ini.j2
+    dest: '{{ grafana_config_path }}/{{ grafana_config_file }}'
+    owner: '{{ grafana_user }}'
+    group: '{{ grafana_group }}'
+    mode: 0640
+  notify: restart grafana
+
+- name: start grafana
+  service:
+    name: grafana-server
+    enabled: yes
+    state: started

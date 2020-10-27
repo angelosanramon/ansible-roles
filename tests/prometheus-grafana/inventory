@@ -1,0 +1,7 @@
+[prometheus_servers]
+prometheus1.cluster.local   ansible_host=192.168.1.100
+prometheus2.cluster.local   ansible_host=192.168.1.101
+
+[grafana_servers]
+grafana1.cluster.local   ansible_host=192.168.1.102
+grafana2.cluster.local   ansible_host=192.168.1.103

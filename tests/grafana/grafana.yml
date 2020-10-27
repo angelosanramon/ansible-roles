@@ -1,0 +1,12 @@
+---
+- name: create grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: chrony
+    - name: grafana
+      vars:
+        grafana_configs:
+          security:
+            admin_user: grafana_admin
+            admin_password: MyPassword

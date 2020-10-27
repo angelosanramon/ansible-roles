@@ -6,12 +6,12 @@
     - name: chrony
 
 - name: create drbd cluster
-  hosts: prometheus_servers
+  hosts: grafana_servers
   become: yes
   roles:
     - name: drbd
       vars:
-        drbd_servers_group_name: prometheus_servers
+        drbd_servers_group_name: grafana_servers
         drbd_resources_conf:
           - name: drbd1
             meta-disk: internal
@@ -22,32 +22,32 @@
             net:
               verify-alg: sha256
             'on':
-              - name: prometheus1.cluster.local
+              - name: grafana1.cluster.local
                 node-id: 0
-                address: 192.168.1.80:7788
-              - name: prometheus2.cluster.local
+                address: 192.168.1.90:7788
+              - name: grafana2.cluster.local
                 node-id: 1
-                address: 192.168.1.81:7788
+                address: 192.168.1.91:7788
             connection-mesh:
-              hosts: prometheus1.cluster.local prometheus2.cluster.local
+              hosts: grafana1.cluster.local grafana2.cluster.local
   post_tasks:
-    - name: create prometheus user group
+    - name: create grafana user group
       group:
-        name: prometheus
+        name: grafana
         state: present
 
-    - name: create prometheus user
+    - name: create grafana user
       user:
-        name: prometheus
-        group: prometheus
+        name: grafana
+        group: grafana
         shell: /sbin/nologin
 
-    - name: create prometheus mount point
+    - name: create grafana mount point
       file:
-        path: /var/lib/prometheus
+        path: /var/lib/grafana
         state: directory
-        owner: prometheus
-        group: prometheus
+        owner: grafana
+        group: grafana
         mode: 0755
 
     - name: get drbd role
@@ -61,9 +61,9 @@
             fstype: xfs
             dev: /dev/drbd1
 
-        - name: mount drbd1 to prometheus mount point
+        - name: mount drbd1 to grafana mount point
           mount:
-            path: /var/lib/prometheus
+            path: /var/lib/grafana
             src: /dev/drbd1
             fstype: xfs
             state: mounted
@@ -72,9 +72,9 @@
     - name: create drbd before demote script
       copy:
         content: |
-          /sbin/pidof prometheus
+          /sbin/pidof grafana-server
           if [ $? -eq 0 ]; then
-              /bin/systemctl stop prometheus
+              /bin/systemctl stop grafana-server
           fi
         dest: /etc/drbd.d/scripts/pre_demote.sh
         owner: root
@@ -84,9 +84,9 @@
     - name: create drbd after demote script
       copy:
         content: |
-          /sbin/pidof prometheus
+          /sbin/pidof grafana-server
           if [ $? -ne 0 ]; then
-              /bin/systemctl start prometheus
+              /bin/systemctl start grafana-server
           fi
         dest: /etc/drbd.d/scripts/post_demote.sh
         owner: root
@@ -98,73 +98,28 @@
         content: |
           /bin/mount | grep -w drbd1
           if [ $? -ne 0 ]; then 
-              /bin/mount /dev/drbd1 /var/lib/prometheus
+              /bin/mount /dev/drbd1 /var/lib/grafana
           fi
 
-          /sbin/pidof prometheus
-          if [ $? -ne 0 ]; the
-              /bin/systemctl start prometheus
-          fi
+          /bin/systemctl restart grafana-server
         dest: /etc/drbd.d/scripts/post_promote.sh
         owner: root
         group: root
         mode: 0744
 
-- name: create prometheus cluster
-  hosts: prometheus_servers
+- name: create grafana cluster
+  hosts: grafana_servers
   become: yes
   roles:
-    - name: prometheus
-      include_vars: defaults/node_exporter.yml
+    - name: grafana
       vars:
-        prometheus_components:
-          alertmanager:
-            installed: true
-          node_exporter:
-            installed: true
-        prometheus_scrape_configs:
-          - job_name: prometheus
-            static_configs:
-              - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    prometheus_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
-          - job_name: node exporters
-            static_configs:
-              - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    node_exporter_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
-        prometheus_alertmanager_config:
-          - static_configs:
-            - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    alertmanager_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
-        alertmanager_servers_group_name: prometheus_servers
-        alertmanager_route_config:
-          group_by:
-            - alertname
-          group_wait: 10s
-          group_interval: 10s
-          repeat_interval: 1h
-          receiver: web.hook
-        alertmanager_receivers_config:
-          - name: web.hook
-            webhook_configs:
-            - url: http://127.0.0.1:5001/
+        grafana_configs:
+          security:
+            admin_user: grafana_admin
+            admin_password: MyPassword
 
 - name: install keepalived
-  hosts: prometheus_servers
+  hosts: grafana_servers
   become: yes
   roles:
     - name: keepalived
@@ -177,12 +132,12 @@
             smtp_server: 127.0.0.1
             smtp_connect_timeout: 15
           vrrp_script:
-            - name: chk_prometheus
-              script: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+            - name: chk_grafana
+              script: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
               interval: 2
               weight: 2
           vrrp_instance:
-            - name: Prometheus_HA
+            - name: Grafana_HA
               interface: |-
                 {%- for key, value in ansible_facts.items() if
                   value.ipv4.network is defined and
@@ -190,10 +145,10 @@
                 {{- key -}}
                 {%- endfor -%}
               state: >-
-                {{- 'MASTER' if groups.prometheus_servers|
+                {{- 'MASTER' if groups.grafana_servers|
                 first == inventory_hostname else 'BACKUP' -}}
               priority: >-
-                {%- for hostname in groups.prometheus_servers|reverse -%}
+                {%- for hostname in groups.grafana_servers|reverse -%}
                   {%- if hostname == inventory_hostname -%}
                     {{- loop.index -}}
                   {%- endif -%}
@@ -211,7 +166,7 @@
                 {%- endfor -%}
               unicast_peer: >-
                 {%- set servers = [] -%}
-                {%- for hostname in groups.prometheus_servers if
+                {%- for hostname in groups.grafana_servers if
                   hostname != inventory_hostname -%}
                   {%- for key, value in hostvars[hostname].ansible_facts.items() if
                     value.ipv4.network is defined and
@@ -221,26 +176,26 @@
                 {%- endfor -%}
                 {{- servers -}}
               virtual_ipaddress:
-                - 192.168.1.100
+                - 192.168.1.200
               track_script:
-                - chk_prometheus
+                - chk_grafana
               notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
               notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
   post_tasks:
-    - name: create prometheus check script
+    - name: create grafana check script
       copy:
         content: |-
           #!/bin/bash
 
-          stat_code=$(curl -L -o /dev/null -s -w "%{http_code}\n" \
-              http://localhost:9090/status)
+          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:3000/api/health)
 
           if [ $stat_code -eq 200 ]; then
               exit 0
           else
               exit 1
           fi
-        dest: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
         owner: root
         group: root
         mode: 0744

@@ -1,0 +1,62 @@
+grafana_pkg_url: https://dl.grafana.com/oss/release/grafana-7.2.2-1.x86_64.rpm
+grafana_pkg_checksum: 13ff90e99a638a25badedfce24c9d6e818e03c9eb7f6f112ad00f897f09813ee
+grafana_user: grafana
+grafana_group: grafana
+grafana_config_path: /etc/grafana
+grafana_config_file: grafana.ini
+grafana_data_path: /var/lib/grafana
+grafana_home_path: /usr/share/grafana
+grafana_log_path: /var/log/grafana
+grafana_log_file: grafana.log
+grafana_pid_path: /run/grafana
+grafana_pid_file: grafana-server.pid
+grafana_plugin_path: "{{ grafana_data_path }}/plugins"
+grafana_provisioning_path: "{{ grafana_config_path }}/provisioning"
+grafana_cert_path: "{{ grafana_config_path }}/certs"
+grafana_servers_group_name: grafana_servers
+grafana_listen_port: 3000
+grafana_max_open_files: 10000
+
+grafana_configs: {}
+# grafana_configs:
+#   app_mode: production
+#   instance_name: "{{ inventory_hostname }}"
+#   paths:
+#     data: "{{ grafana_data_path }}"
+#     logs: "{{ grafana_log_path }}"
+#   server:
+#     protocol: http
+#   database:
+#     type: sqlite3
+
+grafana_cmdline_options: []
+
+grafana_environment_variables:
+  - GRAFANA_USER={{ grafana_user }}
+  - GRAFANA_GROUP={{ grafana_group }}
+  - GRAFANA_HOME={{ grafana_home_path }}
+  - LOG_DIR={{ grafana_log_path }}
+  - DATA_DIR={{ grafana_data_path }}
+  - MAX_OPEN_FILES={{ grafana_max_open_files }}
+  - CONF_DIR={{ grafana_config_path }}
+  - CONF_FILE={{ grafana_config_path }}/{{ grafana_config_file }}
+  - RESTART_ON_UPGRADE=true
+  - PLUGINS_DIR={{ grafana_plugin_path }}
+  - PROVISIONING_CFG_DIR={{ grafana_provisioning_path }}
+
+grafana_firewall_ports:
+  - "{{ grafana_listen_port }}/tcp"
+
+grafana_logrotate_config:
+  paths:
+    - "{{ grafana_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl reload grafana
+      endscript

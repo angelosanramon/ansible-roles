@@ -1,0 +1,10 @@
+{%- for key, value in grafana_configs.items() -%}
+  {%- if value|type_debug == 'dict' -%}
+    {{- "\n[%s]\n"|format(key) -}}
+    {%- for sub_key, sub_value in value.items() -%}
+      {{- "%s = %s\n"|format(sub_key, sub_value) -}}
+    {%- endfor -%}
+  {%- else -%}
+    {{- "%s = %s\n"|format(key, value) -}}
+  {%- endif -%}
+{%- endfor -%}

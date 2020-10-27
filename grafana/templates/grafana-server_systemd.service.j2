@@ -1,0 +1,41 @@
+{%- set cmdline_options = grafana_cmdline_options|default([], true)|
+    reject('search','--config')|
+    reject('search','--pidfile')|
+    reject('search','--packaging')|list
+-%}
+[Unit]
+Description=Grafana instance
+Documentation=http://docs.grafana.org
+Wants=network-online.target
+After=network-online.target
+After=postgresql.service mariadb.service mysqld.service
+
+[Service]
+{% for var in grafana_environment_variables %}
+Environment={{ var }}
+{% endfor %}
+User=grafana
+Group=grafana
+Type=notify
+Restart=on-failure
+WorkingDirectory={{ grafana_home_path }}
+RuntimeDirectory=grafana
+RuntimeDirectoryMode=0750
+ExecStart=/usr/sbin/grafana-server \
+    --config={{ grafana_config_path }}/{{ grafana_config_file }} \
+    --pidfile={{ grafana_pid_path }}/{{ grafana_pid_file }} \
+    --packaging=rpm \
+    cfg:default.paths.logs={{ grafana_log_path }} \
+    cfg:default.paths.data={{ grafana_data_path }} \
+    cfg:default.paths.plugins={{ grafana_plugin_path }} \
+    cfg:default.paths.provisioning={{ grafana_provisioning_path }}
+    {{- ' \\\n' if cmdline_options|length > 0 else '\n' -}}
+    {%- for option in cmdline_options -%}
+      {{ ' '*4 + option }}{{ ' \\\n' if not loop.last else '\n' }}
+    {%- endfor -%}
+
+LimitNOFILE={{ grafana_max_open_files }}
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

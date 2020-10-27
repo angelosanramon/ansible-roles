@@ -1,0 +1,85 @@
+---
+driver:
+  name: vagrant
+  customize:
+    natdnshostresolver1: 'on'
+
+provisioner:
+  name: shell
+
+platforms:
+  - name: centos/8
+
+suites:
+  - name: grafana1
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+        if [ ! -b /dev/sdb1 ]; then
+            sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
+        fi
+    driver_config:
+      vm_hostname: grafana1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.90"}]
+      customize:
+        cpus: 2
+        memory: 1024
+        createhd:
+          - filename: /tmp/drbd1.vdi
+            size: 10240
+        storagectl:
+          - name: IDE
+            portcount: 2
+        storageattach:
+          - storagectl: IDE
+            port: 1
+            device: 0
+            type: hdd
+            medium: /tmp/drbd1.vdi
+  - name: grafana2
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+        if [ ! -b /dev/sdb1 ]; then
+            sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
+        fi
+    driver_config:
+      vm_hostname: grafana2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.91"}]
+      customize:
+        cpus: 2
+        memory: 1024
+        createhd:
+          - filename: /tmp/drbd2.vdi
+            size: 10240
+        storagectl:
+          - name: IDE
+            portcount: 2
+        storageattach:
+          - storagectl: IDE
+            port: 1
+            device: 0
+            type: hdd
+            medium: /tmp/drbd2.vdi
+  - name: ansible
+    provisioner:
+      name: ansible_playbook
+      roles_path: .
+      ansible_inventory: tests/grafana/inventory-grafana-drbd
+      playbook: tests/grafana/grafana-drbd.yml
+      ansible_playbook_command: >-
+        ansible-playbook -e "ansible_user=vagrant 
+        ansible_password=vagrant" --ssh-extra-args="-o ConnectTimeout=10 -o 
+        ConnectionAttempts=60 -o StrictHostKeyChecking=no" -i 
+        /tmp/kitchen/inventory-grafana-drbd
+        /tmp/kitchen/grafana-drbd.yml
+      require_chef_for_busser: false
+      max_retries: 5
+    driver_config:
+      vm_hostname: ansible.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.92"}]

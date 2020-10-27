@@ -1,0 +1,12 @@
+---
+- name: modify hosts file
+  include_tasks: hostsfile.yml
+
+- name: install grafana
+  include_tasks: install.yml
+
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+
+- name: configure logrotate
+  include_tasks: logrotate.yml
