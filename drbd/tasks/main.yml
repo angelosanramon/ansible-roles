@@ -7,3 +7,6 @@
 
 - name: enable firewall
   include_tasks: firewalld.yml
+
+- name: configure rsyslog
+  include_tasks: syslog.yml

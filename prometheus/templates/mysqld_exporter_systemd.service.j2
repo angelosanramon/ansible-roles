@@ -15,7 +15,7 @@ ExecStart=/bin/sh -c '{{ mysqld_exporter_bin_path }}/mysqld_exporter \
     --config.my-cnf={{ mysqld_exporter_config_path }}/{{ 
     mysqld_exporter_mysql_file }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + mysqld_exporter_log_path + '/' + 
     mysqld_exporter_log_file + ' 2>&1\'' }}

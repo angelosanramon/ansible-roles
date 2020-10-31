@@ -16,7 +16,7 @@ ExecStart=/bin/sh -c '{{ blackbox_exporter_bin_path }}/blackbox_exporter \
     blackbox_exporter_config_file }} \
     --web.listen-address={{ blackbox_exporter_web_listen_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + blackbox_exporter_log_path + '/' + 
     blackbox_exporter_log_file + ' 2>&1\'' }}

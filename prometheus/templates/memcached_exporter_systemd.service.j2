@@ -12,7 +12,7 @@ Type=simple
 ExecStart=/bin/sh -c '{{ memcached_exporter_bin_path }}/memcached_exporter \
     --web.listen-address={{ memcached_exporter_web_listen_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + memcached_exporter_log_path + '/' + 
     memcached_exporter_log_file + ' 2>&1\'' }}

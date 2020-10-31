@@ -12,7 +12,7 @@ Type=simple
 ExecStart=/bin/sh -c '{{ pushgateway_bin_path }}/pushgateway \
     --web.listen-address={{ pushgateway_web_listen_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + pushgateway_log_path + '/' + 
     pushgateway_log_file + ' 2>&1\'' }}

@@ -36,6 +36,7 @@
     - set_single_primary.rc != 0
     - "'Multiple primaries not allowed by config' not in 
       set_single_primary.stderr"
+    - "'Concurrent state changes detected' not in set_single_primary.stderr"
 
 - name: wait for sync up to 10 mins
   shell: >-

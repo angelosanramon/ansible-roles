@@ -40,6 +40,10 @@
         user: '{{ alertmanager_user}}',
         group: '{{ alertmanager_group }}',
         mode: '0755' }
+    - { path: '{{ alertmanager_certs_path }}',
+        user: '{{ alertmanager_user }}',
+        group: '{{ alertmanager_group }}',
+        mode: '0755' }
     - { path: '{{ alertmanager_log_path }}',
         user: '{{ alertmanager_user}}',
         group: '{{ alertmanager_group }}',

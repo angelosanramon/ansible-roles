@@ -1,0 +1,77 @@
+- name: create user group
+  group:
+    name: "{{ cert_group }}"
+  when: cert_group is defined and cert_group != ""
+
+- name: create user
+  user:
+    name: "{{ cert_owner }}"
+  when: cert_owner is defined and cert_owner != ""
+
+- name: create destination directory
+  file:
+    path: "{{ cert_path }}"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0755
+    state: directory
+
+- name: load domain full chain certificate to variable
+  slurp:
+    src: >-
+      {{- "%s/%s/%s-fullchain.crt"|format(letsencrypt_certs_path, domain_name,
+      domain_name) -}}
+  register: domain_cert
+  delegate_to: localhost
+
+- name: save domain full chain certificate to file
+  copy:
+    content: "{{ domain_cert.content|b64decode }}"
+    dest: >-
+      {{- "%s/%s-fullchain.crt"|format(cert_path, domain_name) -}}
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0644
+
+- name: load domain key to variable
+  slurp:
+    src: >-
+      {{- "%s/%s/%s.pem"|format(letsencrypt_certs_path, domain_name,
+      domain_name) -}}
+  register: domain_key
+  delegate_to: localhost
+
+- name: save domain key to file
+  copy:
+    content: "{{ domain_key.content|b64decode }}"
+    dest: >-
+      {{- "%s/%s.key"|format(cert_path, domain_name) -}}
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0644
+
+- name: save domain certificate and key to file
+  copy:
+    content: >-
+      {{- domain_cert.content|b64decode + domain_key.content|b64decode -}}
+    dest: >-
+      {{- "%s/%s.pem"|format(cert_path, domain_name) -}}
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0600
+
+- block:
+    - name: load letsencrypt fakeroot certificate to variable
+      slurp:
+        src: "{{ letsencrypt_certs_path }}/{{ domain_name }}/fakelerootx1.crt"
+      register: fakeroot_cert
+      delegate_to: localhost
+
+    - name: save letsencrypt fakeroot certificate to file
+      copy:
+        content: "{{ fakeroot_cert.content|b64decode }}"
+        dest: "{{ cert_path }}/fakelerootx1.crt"
+        owner: "{{ cert_owner|default(omit, true) }}"
+        group: "{{ cert_group|default(omit, true) }}"
+        mode: 0644
+  when: letsencrypt_acme_environment == 'staging'

@@ -17,7 +17,7 @@ ExecStart=/bin/sh -c '{{ statsd_exporter_bin_path }}/statsd_exporter \
     --statsd.listen-udp={{ statsd_exporter_statsd_listen_udp_address }} \
     --statsd.listen-tcp={{ statsd_exporter_statsd_listen_tcp_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + statsd_exporter_log_path + '/' + 
     statsd_exporter_log_file + ' 2>&1\'' }}

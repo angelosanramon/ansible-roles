@@ -1,5 +1,6 @@
 - set_fact:
-    certificate_path: "{{- certs_path + '/' + certificate.common_name -}}"
+    certificate_path: >-
+      {{- letsencrypt_certs_path + '/' + certificate.common_name -}}
 
 - name: create directory to store certs
   file:
@@ -47,30 +48,28 @@
     cert: "{{ certificate_path + '/' + certificate.common_name + '.crt' }}"
     challenge: dns-01
     acme_directory: >-
-      {{- (acme_environment == 'production')|
-      ternary(acme_production_directory, acme_staging_directory) -}}
+      {{- (letsencrypt_acme_environment == 'production')|
+      ternary(letsencrypt_acme_production_directory, 
+      letsencrypt_acme_staging_directory) -}}
     remaining_days: "{{ certificate.valid_days }}"
   register: challenge
 
 - name: create route53 TXT record
   route53:
-    zone: "{{ route53_zone }}"
+    zone: "{{ letsencrypt_route53_zone }}"
     record: "{{ challenge.challenge_data[item]['dns-01'].record }}"
     type: TXT
     ttl: 60
     value: '"{{ challenge.challenge_data[item]["dns-01"].resource_value }}"'
     overwrite: true
     state: present
-    aws_access_key: "{{ aws_access_key|default(omit, true) }}"
-    aws_secret_key: "{{ aws_secret_key|default(omit, true) }}"
+    wait: yes
+    aws_access_key: "{{ letsencrypt_aws_access_key|default(omit, true) }}"
+    aws_secret_key: "{{ letsencrypt_aws_secret_key|default(omit, true) }}"
   with_items: "{{ [certificate.common_name] + certificate.subject_alt_name }}"
   when:
     - challenge is changed
-    - dns_provider == 'route53'
-
-- pause:
-    seconds: 30
-  when: challenge is changed
+    - letsencrypt_dns_provider == 'route53'
 
 - name: validate acme challenge
   acme_certificate:
@@ -81,8 +80,9 @@
     cert: "{{ certificate_path + '/' + certificate.common_name + '.crt' }}"
     challenge: dns-01
     acme_directory: >-
-      {{- (acme_environment == 'production')|
-      ternary(acme_production_directory, acme_staging_directory) -}}
+      {{- (letsencrypt_acme_environment == 'production')|
+      ternary(letsencrypt_acme_production_directory, 
+      letsencrypt_acme_staging_directory) -}}
     remaining_days: "{{ certificate.valid_days }}"
     fullchain: >-
       {{- certificate_path + '/' + certificate.common_name + 
@@ -95,16 +95,22 @@
 
 - name: delete route53 TXT record
   route53:
-    zone: "{{ route53_zone }}"
+    zone: "{{ letsencrypt_route53_zone }}"
     record: "{{ challenge.challenge_data[item]['dns-01'].record }}"
     type: TXT
     ttl: 60
     value: '"{{ challenge.challenge_data[item]["dns-01"].resource_value }}"'
     overwrite: true
     state: absent
-    aws_access_key: "{{ aws_access_key|default(omit, true) }}"
-    aws_secret_key: "{{ aws_secret_key|default(omit, true) }}"
+    aws_access_key: "{{ letsencrypt_aws_access_key|default(omit, true) }}"
+    aws_secret_key: "{{ letsencrypt_aws_secret_key|default(omit, true) }}"
   with_items: "{{ [certificate.common_name] + certificate.subject_alt_name }}"
   when:
     - challenge is changed
-    - dns_provider == 'route53'
+    - letsencrypt_dns_provider == 'route53'
+
+- name: download letsencrypt fakeroot certificate for staging environment
+  get_url:
+    url: https://letsencrypt.org/certs/fakelerootx1.pem
+    dest: "{{ certificate_path }}/fakelerootx1.crt"
+  when: letsencrypt_acme_environment == 'staging'

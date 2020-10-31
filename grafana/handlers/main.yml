@@ -21,9 +21,3 @@
     name: grafana-server
     state: restarted
   listen: restart grafana
-
-- name: reload grafana
-  service:
-    name: grafana-server
-    state: reloaded
-  listen: reload grafana

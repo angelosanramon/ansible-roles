@@ -17,7 +17,7 @@ ExecStart=/bin/sh -c '{{ graphite_exporter_bin_path }}/graphite_exporter \
     --graphite.mapping-config={{ graphite_exporter_config_path }}/{{
     graphite_exporter_config_file }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + graphite_exporter_log_path + '/' + 
     graphite_exporter_log_file + ' 2>&1\'' }}

@@ -1,11 +1,10 @@
----
 - name: sync clock
   hosts: all
   become: yes
   roles:
     - name: chrony
 
-- name: create prometheus drbd cluster
+- name: install drbd for prometheus cluster
   hosts: prometheus_servers
   become: yes
   roles:
@@ -24,10 +23,10 @@
             'on':
               - name: prometheus1.cluster.local
                 node-id: 0
-                address: 192.168.1.100:7788
+                address: 192.168.3.10:7788
               - name: prometheus2.cluster.local
                 node-id: 1
-                address: 192.168.1.101:7788
+                address: 192.168.3.11:7788
             connection-mesh:
               hosts: prometheus1.cluster.local prometheus2.cluster.local
   post_tasks:
@@ -110,12 +109,11 @@
         group: root
         mode: 0744
 
-- name: create prometheus cluster
+- name: install prometheus
   hosts: prometheus_servers
   become: yes
   roles:
     - name: prometheus
-      include_vars: defaults/node_exporter.yml
       vars:
         prometheus_components:
           alertmanager:
@@ -125,31 +123,55 @@
         prometheus_scrape_configs:
           - job_name: prometheus
             static_configs:
-              - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    prometheus_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
+              - targets:
+                  - 192.168.1.10:9090
+                labels:
+                  hostname: prometheus1.cluster.local
+              - targets:
+                  - 192.168.2.10:9090
+                labels:
+                  hostname: prometheus2.cluster.local
           - job_name: node exporters
             static_configs:
-              - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    node_exporter_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
+              - targets:
+                  - 192.168.1.10:9100
+                labels:
+                  hostname: prometheus1.cluster.local
+              - targets:
+                  - 192.168.2.10:9100
+                labels:
+                  hostname: prometheus2.cluster.local
+              - targets:
+                  - 192.168.1.11:9100
+                labels:
+                  hostname: grafana1.cluster.local
+              - targets:
+                  - 192.168.2.11:9100
+                labels:
+                  hostname: grafana2.cluster.local
+              - targets:
+                  - 192.168.1.12:9100
+                labels:
+                  hostname: haproxy1.cluster.local
+              - targets:
+                  - 192.168.2.12:9100
+                labels:
+                  hostname: haproxy2.cluster.local
+          - job_name: haproxy exporters
+            static_configs:
+              - targets:
+                  - 192.168.1.12:9101
+                labels:
+                  hostname: haproxy1.cluster.local
+              - targets:
+                  - 192.168.2.12:9101
+                labels:
+                  hostname: haproxy2.cluster.local
         prometheus_alertmanager_config:
           - static_configs:
-            - targets: >-
-                  {%- set servers = [] -%}
-                  {%- for server in groups[prometheus_servers_group_name] -%}
-                    {{- servers.append(server + ':' + 
-                    alertmanager_web_listen_port|string) -}}
-                  {%- endfor-%}
-                  {{- servers -}}
+              - targets:
+                  - 192.168.1.10:9093
+                  - 192.168.2.10:9093
         alertmanager_servers_group_name: prometheus_servers
         alertmanager_route_config:
           group_by:
@@ -161,9 +183,12 @@
         alertmanager_receivers_config:
           - name: web.hook
             webhook_configs:
-            - url: http://127.0.0.1:5001/
+              - url: http://127.0.0.1:5001
+        node_exporter_cmdline_options:
+          - --collector.drbd
+          - --collector.systemd
 
-- name: install keepalived
+- name: install keepalived for prometheus cluster
   hosts: prometheus_servers
   become: yes
   roles:
@@ -171,6 +196,8 @@
       vars:
         keepalived_configs:
           global_defs:
+            script_user: root root
+            enable_script_security:
             notification_email:
               - email@example.com
             notification_email_from: email@example.com
@@ -186,7 +213,7 @@
               interface: |-
                 {%- for key, value in ansible_facts.items() if
                   value.ipv4.network is defined and
-                  value.ipv4.network == '192.168.1.0' -%}
+                  value.ipv4.network == '192.168.3.0' -%}
                 {{- key -}}
                 {%- endfor -%}
               state: >-
@@ -206,7 +233,7 @@
               unicast_src_ip: >-
                 {%- for key, value in ansible_facts.items() if
                   value.ipv4.network is defined and
-                  value.ipv4.network == '192.168.1.0' -%}
+                  value.ipv4.network == '192.168.3.0' -%}
                 {{- value.ipv4.address -}}
                 {%- endfor -%}
               unicast_peer: >-
@@ -215,13 +242,13 @@
                   hostname != inventory_hostname -%}
                   {%- for key, value in hostvars[hostname].ansible_facts.items() if
                     value.ipv4.network is defined and
-                    value.ipv4.network == '192.168.1.0' -%}
+                    value.ipv4.network == '192.168.3.0' -%}
                     {{- servers.append(value.ipv4.address) -}}
                   {%- endfor -%}
                 {%- endfor -%}
                 {{- servers -}}
               virtual_ipaddress:
-                - 192.168.1.100
+                - 192.168.3.102
               track_script:
                 - chk_prometheus
               notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
@@ -246,7 +273,7 @@
         mode: 0744
       notify: reload keepalived
 
-- name: create drbd cluster
+- name: install drbd for grafana cluster
   hosts: grafana_servers
   become: yes
   roles:
@@ -265,10 +292,10 @@
             'on':
               - name: grafana1.cluster.local
                 node-id: 0
-                address: 192.168.1.102:7788
+                address: 192.168.3.12:7788
               - name: grafana2.cluster.local
                 node-id: 1
-                address: 192.168.1.103:7788
+                address: 192.168.3.13:7788
             connection-mesh:
               hosts: grafana1.cluster.local grafana2.cluster.local
   post_tasks:
@@ -348,7 +375,7 @@
         group: root
         mode: 0744
 
-- name: create grafana cluster
+- name: install grafana
   hosts: grafana_servers
   become: yes
   roles:
@@ -358,8 +385,18 @@
           security:
             admin_user: grafana_admin
             admin_password: MyPassword
+  post_tasks:
+    - name: install node exporter
+      include_role:
+        name: prometheus
+        tasks_from: node_exporter_install.yml
+        defaults_from: main/node_exporter.yml
+      vars:
+        node_exporter_cmdline_options:
+          - --collector.drbd
+          - --collector.systemd
 
-- name: install keepalived
+- name: install keepalived for grafana cluster
   hosts: grafana_servers
   become: yes
   roles:
@@ -367,6 +404,8 @@
       vars:
         keepalived_configs:
           global_defs:
+            script_user: root root
+            enable_script_security:
             notification_email:
               - email@example.com
             notification_email_from: email@example.com
@@ -382,7 +421,7 @@
               interface: |-
                 {%- for key, value in ansible_facts.items() if
                   value.ipv4.network is defined and
-                  value.ipv4.network == '192.168.1.0' -%}
+                  value.ipv4.network == '192.168.3.0' -%}
                 {{- key -}}
                 {%- endfor -%}
               state: >-
@@ -402,7 +441,7 @@
               unicast_src_ip: >-
                 {%- for key, value in ansible_facts.items() if
                   value.ipv4.network is defined and
-                  value.ipv4.network == '192.168.1.0' -%}
+                  value.ipv4.network == '192.168.3.0' -%}
                 {{- value.ipv4.address -}}
                 {%- endfor -%}
               unicast_peer: >-
@@ -411,19 +450,19 @@
                   hostname != inventory_hostname -%}
                   {%- for key, value in hostvars[hostname].ansible_facts.items() if
                     value.ipv4.network is defined and
-                    value.ipv4.network == '192.168.1.0' -%}
+                    value.ipv4.network == '192.168.3.0' -%}
                     {{- servers.append(value.ipv4.address) -}}
                   {%- endfor -%}
                 {%- endfor -%}
                 {{- servers -}}
               virtual_ipaddress:
-                - 192.168.1.200
+                - 192.168.3.101
               track_script:
                 - chk_grafana
               notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
               notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
   post_tasks:
-    - name: create grafana check script
+    - name: create grafana check script for keepalived
       copy:
         content: |-
           #!/bin/bash
@@ -442,3 +481,124 @@
         mode: 0744
       notify: reload keepalived
 
+- name: install haproxy
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+            notification_email_from: email@example.com
+            smtp_server: 127.0.0.1
+            smtp_connect_timeout: 15
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 2
+              weight: 2
+          vrrp_instance:
+            - name: HProxyLB_1
+              interface: |-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == inventory_hostname else
+                  'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 3
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if 
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and 
+                    value.ipv4.network == '192.168.3.0' -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - 192.168.3.100
+              track_script:
+                - chk_haproxy
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          prometheus.cluster.local:
+            bind: 192.168.3.100:9090
+            default_backend: prometheus_servers
+          alertmanager.cluster.local:
+            bind: 192.168.3.100:9093
+            default_backend: alertmanager_servers
+          grafana.cluster.local:
+            bind: 192.168.3.100:3000
+            default_backend: grafana_servers
+        haproxy_backends_config:
+          prometheus_servers:
+            balance: first
+            option: httpchk GET /status
+            default-server: check inter 10s
+            server:
+              - prometheus 192.168.3.102:9090
+          alertmanager_servers:
+            balance: first
+            option: httpchk GET /#/status
+            default-server: check inter 10s
+            server:
+              - alertmanager 192.168.3.102:9093
+          grafana_servers:
+            balance: first
+            option: httpchk GET /api/health
+            default-server: check inter 10s
+            server:
+              - grafana 192.168.3.101:3000
+        haproxy_firewall_ports:
+          - 9090/tcp
+          - 9093/tcp
+          - 3000/tcp
+          - 8404/tcp
+  post_tasks:
+    - name: install node exporter
+      include_role:
+        name: prometheus
+        tasks_from: node_exporter_install.yml
+        defaults_from: main/node_exporter.yml
+      vars:
+        node_exporter_cmdline_options:
+          - --collector.systemd
+    - name: install haproxy exporter
+      include_role:
+        name: prometheus
+        tasks_from: haproxy_exporter_install.yml
+        defaults_from: main/haproxy_exporter.yml

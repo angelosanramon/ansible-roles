@@ -31,7 +31,7 @@
     - { path: '{{ haproxy_certs_path }}',
         user: '{{ haproxy_user}}',
         group: '{{ haproxy_group }}',
-        mode: '0700' }
+        mode: '0755' }
     - { path: '{{ haproxy_run_path }}',
         user: 'root',
         group: 'root',

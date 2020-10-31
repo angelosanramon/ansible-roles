@@ -15,11 +15,16 @@
       {{ server_certificate_path }}/{{ server_certificate.common_name }}.key
     size: 4096
 
+- set_fact:
+    sans:
+      - DNS:localhost
+      - IP:127.0.0.1
+
 - name: generate csr for {{ server_certificate.common_name }} certificate
   openssl_csr:
     common_name: "{{ server_certificate.common_name }}"
     subject_alt_name: >-
-      {{- server_certificate.subject_alt_names|default(omit, true) -}}
+      {{- sans + server_certificate.subject_alt_names|default([], true) -}}
     email_address: >-
       {{- server_certificate.email_address|default(omit, true) -}}
     locality_name: >-

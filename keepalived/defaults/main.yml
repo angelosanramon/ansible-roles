@@ -84,11 +84,6 @@ keepalived_logrotate_config:
           /usr/bin/systemctl reload keepalived
       endscript
 
-keepalived_syslog_config:
-  - facility_code: local0
-    severity_level: '*'
-    logfile: "{{ keepalived_log_path + '/' + keepalived_log_file }}"
-
 keepalived_build_dependencies:
   - make
   - gcc

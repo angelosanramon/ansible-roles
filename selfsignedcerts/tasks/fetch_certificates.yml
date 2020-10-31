@@ -1,0 +1,66 @@
+- name: create user group
+  group:
+    name: "{{ cert_group }}"
+  when: cert_group is defined and cert_group != ""
+
+- name: create user
+  user:
+    name: "{{ cert_owner }}"
+  when: cert_owner is defined and cert_owner != ""
+
+- name: create destination directory
+  file:
+    path: "{{ cert_path }}"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0755
+    state: directory
+
+- name: fetch ca certificate
+  copy:
+    src: "{{ selfsignedcerts_certs_path }}/ca/ca.crt"
+    dest: "{{ cert_path }}/ca.crt"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0644
+
+- name: load server certificate to variable
+  slurp:
+    src: >-
+      {{- "%s/%s/%s.crt"|format(selfsignedcerts_certs_path, inventory_hostname,
+      inventory_hostname) -}}
+  register: server_cert
+  delegate_to: localhost
+
+- name: save server certificate to file
+  copy:
+    content: "{{ server_cert.content|b64decode }}"
+    dest: "{{ cert_path }}/{{ inventory_hostname }}.crt"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0644
+
+- name: load server key to variable
+  slurp:
+    src: >-
+      {{- "%s/%s/%s.key"|format(selfsignedcerts_certs_path, inventory_hostname,
+      inventory_hostname) -}}
+  register: server_key
+  delegate_to: localhost
+
+- name: save server key to file
+  copy:
+    content: "{{ server_key.content|b64decode }}"
+    dest: "{{ cert_path }}/{{ inventory_hostname }}.key"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0600
+
+- name: combine server key and certificate
+  copy:
+    content: >-
+      {{- server_cert.content|b64decode + server_key.content|b64decode -}}
+    dest: "{{ cert_path }}/{{ inventory_hostname }}.pem"
+    owner: "{{ cert_owner|default(omit, true) }}"
+    group: "{{ cert_group|default(omit, true) }}"
+    mode: 0600

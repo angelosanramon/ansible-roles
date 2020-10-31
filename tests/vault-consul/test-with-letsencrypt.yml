@@ -55,7 +55,7 @@
         owner: "{{ haproxy_user }}"
         group: "{{ haproxy_group }}"
         mode: 0700
-      delegate_to: "{{ item }}"   
+      delegate_to: "{{ item }}"
       with_items: "{{ groups.haproxy_servers }}"
 
     - name: copy cert and private key to haproxy servers

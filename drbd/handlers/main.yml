@@ -21,3 +21,9 @@
     name: drbd
     state: reloaded
   listen: reload drbd
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog

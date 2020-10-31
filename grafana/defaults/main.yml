@@ -12,7 +12,7 @@ grafana_pid_path: /run/grafana
 grafana_pid_file: grafana-server.pid
 grafana_plugin_path: "{{ grafana_data_path }}/plugins"
 grafana_provisioning_path: "{{ grafana_config_path }}/provisioning"
-grafana_cert_path: "{{ grafana_config_path }}/certs"
+grafana_cert_path: "{{ grafana_config_path }}/tls"
 grafana_servers_group_name: grafana_servers
 grafana_listen_port: 3000
 grafana_max_open_files: 10000

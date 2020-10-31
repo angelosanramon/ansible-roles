@@ -1,0 +1,734 @@
+---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: asr1970@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name: 
+              - prometheus.example.com
+              - alertmanager.example.com
+              - grafana.example.com
+            valid_days: 7
+    - name: selfsignedcerts
+      vars:
+        selfsignedcerts_server_certificates:
+          - common_name: prometheus1.cluster.local
+            subject_alt_names:
+              - DNS:alertmanager1.cluster.local
+              - IP:192.168.3.102
+              - IP:192.168.1.10
+          - common_name: prometheus2.cluster.local
+            subject_alt_names:
+              - DNS:alertmanager2.cluster.local
+              - IP:192.168.3.102
+              - IP:192.168.2.10
+          - common_name: grafana1.cluster.local
+            subject_alt_names:
+              - IP:192.168.3.101
+              - IP:192.168.1.11
+          - common_name: grafana2.cluster.local
+            subject_alt_names:
+              - IP:192.168.3.101
+              - IP:192.168.2.11
+          - common_name: haproxy1.cluster.local
+            subject_alt_names:
+              - IP:192.168.3.100
+              - IP:192.168.1.12
+          - common_name: haproxy2.cluster.local
+            subject_alt_names:
+              - IP:192.168.3.100
+              - IP:192.168.2.12
+
+- name: sync clock
+  hosts: all
+  become: yes
+  roles:
+    - name: chrony
+
+- name: install drbd for prometheus cluster
+  hosts: prometheus_servers
+  become: yes
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: prometheus_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: prometheus1.cluster.local
+                node-id: 0
+                address: 192.168.3.10:7788
+              - name: prometheus2.cluster.local
+                node-id: 1
+                address: 192.168.3.11:7788
+            connection-mesh:
+              hosts: prometheus1.cluster.local prometheus2.cluster.local
+  post_tasks:
+    - name: create prometheus user group
+      group:
+        name: prometheus
+        state: present
+
+    - name: create prometheus user
+      user:
+        name: prometheus
+        group: prometheus
+        shell: /sbin/nologin
+
+    - name: create prometheus mount point
+      file:
+        path: /var/lib/prometheus
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: 0755
+
+    - name: get drbd role
+      shell: /sbin/drbdadm drbdadm role drbd1
+      register: role
+      changed_when: false
+
+    - block:
+        - name: format drbd1 device
+          filesystem:
+            fstype: xfs
+            dev: /dev/drbd1
+
+        - name: mount drbd1 to prometheus mount point
+          mount:
+            path: /var/lib/prometheus
+            src: /dev/drbd1
+            fstype: xfs
+            state: mounted
+      when: role.stdout == 'Primary'
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          /sbin/pidof prometheus
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop prometheus
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof prometheus
+          if [ $? -ne 0 ]; then
+              /bin/systemctl start prometheus
+          fi
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -ne 0 ]; then 
+              /bin/mount /dev/drbd1 /var/lib/prometheus
+          fi
+
+          /sbin/pidof prometheus
+          if [ $? -ne 0 ]; the
+              /bin/systemctl start prometheus
+          fi
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: install prometheus
+  hosts: prometheus_servers
+  become: yes
+  pre_tasks:
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ alertmanager_certs_path }}"
+        cert_owner: "{{ alertmanager_user }}"
+        cert_group: "{{ alertmanager_group }}"
+      register: copy_self_signed_certs
+  roles:
+    - name: prometheus
+      vars:
+        prometheus_components:
+          alertmanager:
+            installed: true
+          node_exporter:
+            installed: true
+        prometheus_scrape_configs:
+          - job_name: prometheus
+            static_configs:
+              - targets:
+                  - 192.168.1.10:9090
+                labels:
+                  hostname: prometheus1.cluster.local
+              - targets:
+                  - 192.168.2.10:9090
+                labels:
+                  hostname: prometheus2.cluster.local
+          - job_name: node exporters
+            static_configs:
+              - targets:
+                  - 192.168.1.10:9100
+                labels:
+                  hostname: prometheus1.cluster.local
+              - targets:
+                  - 192.168.2.10:9100
+                labels:
+                  hostname: prometheus2.cluster.local
+              - targets:
+                  - 192.168.1.11:9100
+                labels:
+                  hostname: grafana1.cluster.local
+              - targets:
+                  - 192.168.2.11:9100
+                labels:
+                  hostname: grafana2.cluster.local
+              - targets:
+                  - 192.168.1.12:9100
+                labels:
+                  hostname: haproxy1.cluster.local
+              - targets:
+                  - 192.168.2.12:9100
+                labels:
+                  hostname: haproxy2.cluster.local
+          - job_name: haproxy exporters
+            static_configs:
+              - targets:
+                  - 192.168.1.12:9101
+                labels:
+                  hostname: haproxy1.cluster.local
+              - targets:
+                  - 192.168.2.12:9101
+                labels:
+                  hostname: haproxy2.cluster.local
+        prometheus_alertmanager_config:
+          - static_configs:
+              - targets:
+                  - 192.168.1.10:9093
+                  - 192.168.2.10:9093
+        alertmanager_servers_group_name: prometheus_servers
+        alertmanager_global_config:
+          http_config:
+            tls_config:
+              ca_file: "{{ alertmanager_certs_path }}/ca.crt"
+              cert_file: >-
+                {{- alertmanager_certs_path + '/' + inventory_hostname +
+                '.crt' -}}
+              key_file: >-
+                {{- alertmanager_certs_path + '/' + inventory_hostname +
+                '.key' -}}
+        alertmanager_route_config:
+          group_by:
+            - alertname
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 1h
+          receiver: web.hook
+        alertmanager_receivers_config:
+          - name: web.hook
+            webhook_configs:
+              - url: http://127.0.0.1:5001
+        node_exporter_cmdline_options:
+          - --collector.drbd
+          - --collector.systemd
+  post_tasks:
+    - name: reload alertmanager
+      service:
+        name: alertmanager
+        state: reloaded
+      when: copy_self_signed_certs is changed
+
+- name: install keepalived for prometheus cluster
+  hosts: prometheus_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+            notification_email_from: email@example.com
+            smtp_server: 127.0.0.1
+            smtp_connect_timeout: 15
+          vrrp_script:
+            - name: chk_prometheus
+              script: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+              interval: 2
+              weight: 2
+          vrrp_instance:
+            - name: Prometheus_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.prometheus_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.prometheus_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.prometheus_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == '192.168.3.0' -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - 192.168.3.102
+              track_script:
+                - chk_prometheus
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create prometheus check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -L -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:9090/status)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived
+
+- name: install drbd for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: grafana_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: grafana1.cluster.local
+                node-id: 0
+                address: 192.168.3.12:7788
+              - name: grafana2.cluster.local
+                node-id: 1
+                address: 192.168.3.13:7788
+            connection-mesh:
+              hosts: grafana1.cluster.local grafana2.cluster.local
+  post_tasks:
+    - name: create grafana user group
+      group:
+        name: grafana
+        state: present
+
+    - name: create grafana user
+      user:
+        name: grafana
+        group: grafana
+        shell: /sbin/nologin
+
+    - name: create grafana mount point
+      file:
+        path: /var/lib/grafana
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: 0755
+
+    - name: get drbd role
+      shell: /sbin/drbdadm drbdadm role drbd1
+      register: role
+      changed_when: false
+
+    - block:
+        - name: format drbd1 device
+          filesystem:
+            fstype: xfs
+            dev: /dev/drbd1
+
+        - name: mount drbd1 to grafana mount point
+          mount:
+            path: /var/lib/grafana
+            src: /dev/drbd1
+            fstype: xfs
+            state: mounted
+      when: role.stdout == 'Primary'
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          /sbin/pidof grafana-server
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof grafana-server
+          if [ $? -ne 0 ]; then
+              /bin/systemctl start grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -ne 0 ]; then 
+              /bin/mount /dev/drbd1 /var/lib/grafana
+          fi
+
+          /bin/systemctl restart grafana-server
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: install grafana
+  hosts: grafana_servers
+  become: yes
+  pre_tasks:
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ grafana_cert_path }}"
+        cert_owner: "{{ grafana_user }}"
+        cert_group: "{{ grafana_group }}"
+      register: copy_self_signed_certs
+  roles:
+    - name: grafana
+      vars:
+        grafana_configs:
+          server:
+            protocol: https
+            cert_file: "{{ grafana_cert_path }}/{{ inventory_hostname }}.crt"
+            cert_key: "{{ grafana_cert_path }}/{{ inventory_hostname }}.key"
+          security:
+            admin_user: grafana_admin
+            admin_password: MyPassword
+  post_tasks:
+    - name: install node exporter
+      include_role:
+        name: prometheus
+        tasks_from: node_exporter_install.yml
+        defaults_from: main/node_exporter.yml
+      vars:
+        node_exporter_cmdline_options:
+          - --collector.drbd
+          - --collector.systemd
+
+    - name: restart grafana
+      service:
+        name: grafana-server
+        state: restarted
+      when: copy_self_signed_certs is changed
+
+- name: install keepalived for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+            notification_email_from: email@example.com
+            smtp_server: 127.0.0.1
+            smtp_connect_timeout: 15
+          vrrp_script:
+            - name: chk_grafana
+              script: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+              interval: 2
+              weight: 2
+          vrrp_instance:
+            - name: Grafana_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.grafana_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.grafana_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 2
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.grafana_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == '192.168.3.0' -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - 192.168.3.101
+              track_script:
+                - chk_grafana
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create grafana check script for keepalived
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl --cacert /etc/grafana/tls/ca.crt \
+              -o /dev/null -s -w "%{http_code}\n" \
+              https://localhost:3000/api/health)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived
+
+- name: install haproxy
+  hosts: haproxy_servers
+  become: yes
+  pre_tasks:
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: /etc/haproxy/tls
+        cert_owner: haproxy
+        cert_group: haproxy
+      register: copy_self_signed_certs
+
+    - name: copy letsencrypt certificates
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: /etc/haproxy/tls
+        cert_owner: haproxy
+        cert_group: haproxy
+        domain_name: example.com
+      register: copy_letsencrypt_certs
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+            notification_email_from: email@example.com
+            smtp_server: 127.0.0.1
+            smtp_connect_timeout: 15
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 2
+              weight: 2
+          vrrp_instance:
+            - name: HProxyLB_1
+              interface: |-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == inventory_hostname else
+                  'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 3
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if 
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and 
+                    value.ipv4.network == '192.168.3.0' -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - 192.168.3.100
+              track_script:
+                - chk_haproxy
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          prometheus.cluster.local:
+            bind: >-
+              192.168.3.100:9090 ssl crt
+              {{ haproxy_certs_path }}/example.com.pem
+            default_backend: prometheus_servers
+          alertmanager.cluster.local:
+            bind: >-
+              192.168.3.100:9093 ssl crt
+              {{ haproxy_certs_path }}/example.com.pem
+            default_backend: alertmanager_servers
+          grafana.cluster.local:
+            bind: >-
+              192.168.3.100:3000 ssl crt
+              {{ haproxy_certs_path }}/example.com.pem
+            default_backend: grafana_servers
+        haproxy_backends_config:
+          prometheus_servers:
+            balance: first
+            option: httpchk GET /status
+            default-server: check inter 10s
+            server:
+              - prometheus 192.168.3.102:9090
+          alertmanager_servers:
+            balance: first
+            option: httpchk GET /#/status
+            default-server: check inter 10s
+            server:
+              - alertmanager 192.168.3.102:9093
+          grafana_servers:
+            balance: first
+            option: httpchk GET /api/health
+            default-server: check inter 10s
+            server:
+              - grafana 192.168.3.101:3000 ssl ca-file /etc/haproxy/tls/ca.crt
+        haproxy_firewall_ports:
+          - 9090/tcp
+          - 9093/tcp
+          - 3000/tcp
+          - 8404/tcp
+  post_tasks:
+    - name: install node exporter
+      include_role:
+        name: prometheus
+        tasks_from: node_exporter_install.yml
+        defaults_from: main/node_exporter.yml
+      vars:
+        node_exporter_cmdline_options:
+          - --collector.systemd
+
+    - name: install haproxy exporter
+      include_role:
+        name: prometheus
+        tasks_from: haproxy_exporter_install.yml
+        defaults_from: main/haproxy_exporter.yml
+
+    - name: reload haproxy
+      service:
+        name: haproxy
+        state: reloaded
+      when: copy_self_signed_certs is changed or 
+            copy_letsencrypt_certs is changed

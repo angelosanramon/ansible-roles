@@ -5,11 +5,11 @@
   roles:
     - letsencrypt
   vars:
-    acme_email: email@example.com
-    aws_access_key: my_aws_access_key
-    aws_secret_key: my_aws_secret_key
-    route53_zone: example.com
-    certificates:
+    letsencrypt_acme_email: email@example.com
+    letsencrypt_aws_access_key: my_aws_access_key
+    letsencrypt_aws_secret_key: my_aws_secret_key
+    letsencrypt_route53_zone: example.com
+    letsencrypt_certificates:
       - common_name: example.com
         subject_alt_name: 
           - consul.example.com

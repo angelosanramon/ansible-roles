@@ -12,7 +12,7 @@ Type=simple
 ExecStart=/bin/sh -c '{{ node_exporter_bin_path }}/node_exporter \
     --web.listen-address={{ node_exporter_web_listen_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + node_exporter_log_path + '/' + 
     node_exporter_log_file + ' 2>&1\'' }}

@@ -12,7 +12,7 @@ Type=simple
 ExecStart=/bin/sh -c '{{ consul_exporter_bin_path }}/consul_exporter \
     --web.listen-address={{ consul_exporter_web_listen_address }} \
     {%- for option in cmdline_options -%}
-      {{ ' '*4 + option + ' \\\n' }}
+      {{ '\n' + option|indent(width=4,first=true) + ' \\' }}
     {%- endfor -%}
     {{ '\n    >> ' + consul_exporter_log_path + '/' + 
     consul_exporter_log_file + ' 2>&1\'' }}

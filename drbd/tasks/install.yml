@@ -46,13 +46,16 @@
     - drdb_util_check.rc != 0
     - "'No matching Packages' in drdb_util_check.stderr"
 
-- name: create drbd scripts directory
+- name: create drbd directories
   file:
-    path: '{{ drdb_script_path }}'
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: 0755
+  with_items:
+    - "{{ drdb_log_path }}"
+    - "{{ drdb_script_path }}"
 
 - name: create drbd global config file
   template:

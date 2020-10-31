@@ -5,6 +5,6 @@
 
 - name: request an acme certificate
   include_tasks: request_certificate.yml
-  with_items: "{{ certificates }}"
+  with_items: "{{ letsencrypt_certificates }}"
   loop_control:
     loop_var: certificate
