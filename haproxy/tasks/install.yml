@@ -45,29 +45,44 @@
         group: '{{ haproxy_group }}',        
         mode: '0755' }
 
+- set_fact:
+    haproxy_base_src_url: >-
+      {{ "http://www.haproxy.org/download" }}/{{ 
+        haproxy_version.split('.')[:-1]|join('.') }}/src
+
+- name: download checksum file
+  get_url:
+    url: >-
+      {{ haproxy_base_src_url }}/haproxy-{{ haproxy_version }}.tar.gz.sha256
+    dest: /usr/local/src
+
+- name: get checksum from file
+  slurp:
+    src: /usr/local/src/haproxy-{{ haproxy_version }}.tar.gz.sha256
+  register: checksum
+
 - name: download haproxy source file
   get_url:
-    url: '{{ haproxy_src_url }}'
+    url: >-
+      {{ haproxy_base_src_url }}/haproxy-{{ haproxy_version }}.tar.gz
     dest: /usr/local/src
-    checksum: 'sha256:{{ haproxy_src_checksum }}'
-
-- set_fact:
-    source_filename: >-
-      {{ haproxy_src_url|urlsplit('path')|basename }}
+    checksum: sha256:{{ (checksum.content|b64decode).split()[0] }}
 
 - name: uncompress haproxy source file
   unarchive:
-    src: /usr/local/src/{{ source_filename }}
+    src: /usr/local/src/haproxy-{{ haproxy_version }}.tar.gz
     dest: /usr/local/src
     remote_src: yes
+  register: unarchive_result
 
 - name: build and install haproxy
   shell: >-
     make {{ haproxy_build_options|join(' ') }} && make install
   args:
-    chdir: /usr/local/src/{{ ((source_filename|splitext)[0]|splitext)[0] }}
-    creates: /usr/local/sbin/haproxy
+    chdir: /usr/local/src/haproxy-{{ haproxy_version }}
   register: build_result
+  when: unarchive_result is changed
+  notify: restart haproxy
 
 - name: create haproxy systemd file
   template:

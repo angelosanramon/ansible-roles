@@ -33,10 +33,10 @@
     - name: save unseal keys to file
       copy:
         content: "{{ unseal_keys|join('\n') }}"
-        dest: '{{ vault_config_path }}/.vault_unseal_keys'
-        owner: '{{ vault_user }}'
-        group: '{{ vault_group }}'
-        mode: 0640
+        dest: "{{ vault_data_path }}/.vault_unseal_keys"
+        owner: "{{ vault_user }}"
+        group: "{{ vault_group }}"
+        mode: 0600
       no_log: true
 
     - include_tasks: copyto_unseal_keys.yml

@@ -1,12 +1,12 @@
 - block:
     - name: check if unseal keys file exist
       stat:
-        path: '{{ vault_config_path }}/.vault_unseal_keys'
+        path: '{{ vault_data_path }}/.vault_unseal_keys'
       register: check_unseal_keys_file
 
     - name: load unseal keys file
       slurp:
-        src: '{{ vault_config_path }}/.vault_unseal_keys'
+        src: '{{ vault_data_path }}/.vault_unseal_keys'
       register: unseal_keys_file
       when: check_unseal_keys_file.stat.exists
       no_log: true

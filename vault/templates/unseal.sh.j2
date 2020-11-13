@@ -8,9 +8,10 @@ function unseal {
 
 stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
 http://127.0.0.1:{{ vault_port }}/v1/sys/health)
+echo $stat_code
 if [ $stat_code -eq 503 ] && 
-[ -f {{ vault_config_path }}/.vault_unseal_keys ]; then
-    keys=$(cat {{ vault_config_path }}/.vault_unseal_keys)
+[ -f {{ vault_data_path }}/.vault_unseal_keys ]; then
+    keys=$(cat {{ vault_data_path }}/.vault_unseal_keys)
     for key in $keys; do
         unseal $key
     done

@@ -1,4 +1,20 @@
 ---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: email@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name:
+              - vault.example.com
+            valid_days: 7
+
 - name: sync clock
   hosts: vault_servers
   become: yes
@@ -209,6 +225,17 @@
       include_role:
         name: keepalived
         tasks_from: sysctl
+
+    - name: copy letsencrypt certificates to grafana servers
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ vault_certs_path }}"
+        cert_owner: "{{ vault_user }}"
+        cert_group: "{{ vault_group }}"
+        domain_name: example.com
+      register: copy_letsencrypt_certs
   roles:
     - name: vault
       vars:
@@ -219,11 +246,14 @@
             - tcp:
                 address: "{{ keepalived_vip }}:{{ vault_port }}"
                 cluster_address: "{{ keepalived_vip }}:{{ vault_cluster_port }}"
-                tls_disable: true
+                tls_cert_file: >-
+                  {{ vault_certs_path }}/example.com-fullchain.crt
+                tls_key_file: >-
+                  {{ vault_certs_path }}/example.com.key
           storage:
             file:
               path: "{{ vault_data_path }}"
-          api_addr: http://{{ keepalived_vip }}:{{ vault_port }}
+          api_addr: https://{{ keepalived_vip }}:{{ vault_port }}
           log_level: info
           log_format: standard
           pid_file: "{{ vault_run_path }}/vault.pid"
@@ -284,6 +314,12 @@
             password: mypassword
             token_policies:
               - vault_admin
+  post_tasks:
+    - name: restart grafana
+      service:
+        name: grafana-server
+        state: restarted
+      when: copy_letsencrypt_certs is changed
 
 - name: setup keepalived for vault cluster
   hosts: vault_servers

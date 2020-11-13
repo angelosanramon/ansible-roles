@@ -565,17 +565,17 @@
           prometheus_cluster:
             bind: 192.168.3.100:9090
             acl: >-
-              header_host_hostname hdr(host) -i -m beg prometheus.apsrnet.com
+              header_host_hostname hdr(host) -i -m beg prometheus.example.com
             use_backend: prometheus_servers if header_host_hostname
           alertmanager_cluster:
             bind: 192.168.3.100:9093
             acl: >-
-              header_host_hostname hdr(host) -i -m beg alertmanager.apsrnet.com
+              header_host_hostname hdr(host) -i -m beg alertmanager.example.com
             use_backend: alertmanager_servers if header_host_hostname
           grafana_cluster:
             bind: 192.168.3.100:3000
             acl: >-
-              header_host_hostname hdr(host) -i -m beg grafana.apsrnet.com
+              header_host_hostname hdr(host) -i -m beg grafana.example.com
             use_backend: grafana_servers if header_host_hostname
         haproxy_backends_config:
           prometheus_servers:

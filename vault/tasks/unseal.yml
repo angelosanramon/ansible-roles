@@ -14,13 +14,13 @@
 - block:
     - name: check if unseal keys file exist
       stat:
-        path: '{{ vault_config_path }}/.vault_unseal_keys'
+        path: '{{ vault_data_path }}/.vault_unseal_keys'
       register: unseal_keys_file
 
     - block:
         - name: load unseal keys from file
           slurp:
-            src: '{{ vault_config_path }}/.vault_unseal_keys'
+            src: '{{ vault_data_path }}/.vault_unseal_keys'
           register: source_unseal_keys_file_content
           no_log: true
 

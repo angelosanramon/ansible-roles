@@ -68,12 +68,12 @@ suites:
       name: ansible_playbook
       roles_path: .
       ansible_inventory: hosts
-      playbook: playbooks/vault-cluster.yml
+      playbook: playbooks/vault-cluster-tls.yml
       ansible_playbook_command: >-
         ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant"
         --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
         -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts 
-        /tmp/kitchen/vault-cluster.yml
+        /tmp/kitchen/vault-cluster-tls.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:

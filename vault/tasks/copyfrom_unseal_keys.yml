@@ -1,13 +1,13 @@
 - block:
     - name: check if source unseal keys file exist
       stat:
-        path: '{{ vault_config_path }}/.vault_unseal_keys'
+        path: '{{ vault_data_path }}/.vault_unseal_keys'
       register: source_unseal_keys_file
       delegate_to: '{{ src_host }}'
 
     - name: load source unseal keys file
       slurp:
-        src: '{{ vault_config_path }}/.vault_unseal_keys'
+        src: '{{ vault_data_path }}/.vault_unseal_keys'
       register: source_unseal_keys_file_content
       no_log: true
       delegate_to: '{{ src_host }}'
@@ -20,7 +20,7 @@
     - name: save unseal tokens to file
       copy:
         content: "{{ unseal_keys|join('\n') }}"
-        dest: '{{ vault_config_path }}/.vault_unseal_keys'
+        dest: '{{ vault_data_path }}/.vault_unseal_keys'
         owner: '{{ vault_user }}'
         group: '{{ vault_group }}'
         mode: 0600

@@ -1,6 +1,5 @@
 ---
-haproxy_src_url: http://www.haproxy.org/download/2.2/src/haproxy-2.2.3.tar.gz
-haproxy_src_checksum: 7209db363d4dbecb21133f37b01048df666aebc14ff543525dbea79be202064e
+haproxy_version: 2.3.0
 haproxy_user: haproxy
 haproxy_group: haproxy
 haproxy_config_path: /etc/haproxy
