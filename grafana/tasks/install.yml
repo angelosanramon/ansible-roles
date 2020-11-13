@@ -1,58 +1,55 @@
-- name: download grafana binary package
-  get_url:
-    url: '{{ grafana_pkg_url }}'
-    dest: /usr/local/src
-    checksum: 'sha256:{{ grafana_pkg_checksum }}'
-  register: download_result
-
-- set_fact:
-    source_filename: >-
-      {{ grafana_pkg_url|urlsplit('path')|basename }}
-
-- name: install grafana
-  dnf:
-    name: /usr/local/src/{{ source_filename }}
-    state: present
-    disable_gpg_check: yes
-
 - name: create grafana directories
   file:
-    path: '{{ item.path }}'
+    path: "{{ item }}"
     state: directory
-    owner: '{{ item.user }}'
-    group: '{{ item.group }}'
-    mode: '{{ item.mode }}'
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: 0755
   with_items:
-    - { path: '{{ grafana_data_path }}',
-        user: '{{ grafana_user }}',
-        group: '{{ grafana_group }}',
-        mode: '0755' }
-    - { path: '{{ grafana_cert_path }}',
-        user: '{{ grafana_user }}',
-        group: '{{ grafana_group }}',
-        mode: '0755' }
-    - { path: '{{ grafana_log_path }}',
-        user: '{{ grafana_user }}',
-        group: '{{ grafana_group }}',
-        mode: '0755' }
+    - "{{ grafana_data_path }}"
+    - "{{ grafana_certs_path }}"
+    - "{{ grafana_log_path }}"
+    - "{{ grafana_home_path }}"
+    - "{{ grafana_config_path }}"
+
+- name: download grafana binary package
+  get_url:
+    url: >-
+      https://dl.grafana.com/oss/release/grafana-{{
+      grafana_version }}.linux-amd64.tar.gz
+    dest: /usr/local/src
+    checksum: sha256:{{ grafana_checksum }}
+  register: download_result
+
+- name: extract grafana package
+  unarchive:
+    src: >-
+      /usr/local/src/grafana-{{ grafana_version }}.linux-amd64.tar.gz
+    dest: "{{ grafana_home_path }}"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    extra_opts:
+      - --strip-components=1
+    remote_src: yes
+    validate_certs: no
 
 - name: create prometheus systemd file
   template:
     src: grafana-server_systemd.service.j2
-    dest: /usr/lib/systemd/system/grafana-server.service
+    dest: /etc/systemd/system/grafana-server.service
     owner: root
     group: root
     mode: 0644
   notify:
     - reload systemd
-    #- restart grafana
+    - restart grafana
 
 - name: create grafana config file
   template:
     src: grafana.ini.j2
-    dest: '{{ grafana_config_path }}/{{ grafana_config_file }}'
-    owner: '{{ grafana_user }}'
-    group: '{{ grafana_group }}'
+    dest: "{{ grafana_config_path }}/{{ grafana_config_file }}"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
     mode: 0640
   notify: restart grafana
 

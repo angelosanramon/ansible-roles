@@ -1,0 +1,76 @@
+---
+- name: sync clock
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup haproxy cluster
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: haproxy
+
+- name: setup keepalived for haproxy cluster
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == 
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy

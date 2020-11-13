@@ -1,0 +1,32 @@
+[haproxy_servers]
+haproxy1.cluster.local         ansible_host=192.168.1.250
+haproxy2.cluster.local         ansible_host=192.168.2.250
+
+[consul_servers]
+consul1.cluster.local          ansible_host=192.168.1.10
+consul2.cluster.local          ansible_host=192.168.2.10
+consul3.cluster.local          ansible_host=192.168.3.10
+
+[vault_servers]
+vault1.cluster.local           ansible_host=192.168.1.11
+vault2.cluster.local           ansible_host=192.168.2.11
+
+[drbd_servers]
+drbd1.cluster.local            ansible_host=192.168.1.12
+drbd2.cluster.local            ansible_host=192.168.2.12
+
+[grafana_servers]
+grafana1.cluster.local         ansible_host=192.168.1.13
+grafana2.cluster.local         ansible_host=192.168.2.13
+
+[prometheus_servers]
+prometheus1.cluster.local      ansible_host=192.168.1.14
+prometheus2.cluster.local      ansible_host=192.168.2.14
+
+[jenkins_masters]
+jenkins-master1.cluster.local  ansible_host=192.168.1.15
+jenkins-master1.cluster.local  ansible_host=192.168.2.15
+
+[jenkins_slaves]
+jenkins-slave1.cluster.local   ansible_host=192.168.1.16
+jenkins-slave1.cluster.local   ansible_host=192.168.2.16

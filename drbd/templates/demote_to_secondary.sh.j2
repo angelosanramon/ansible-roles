@@ -1,19 +1,24 @@
 #!/bin/bash
 
-if [ "$(/sbin/drbdadm role all)" == "Secondary" ]; then
-    echo "Already in the secondary role."
+cd ~
+
+role=$(/sbin/drbdadm role all)
+if [ "$role" == "Secondary" ]; then
+    echo "Already in the secondary role" >> {{ drdb_log_path }}/demote.log
     exit 0
 fi
 
 # Before demote script
-if [ -f "{{drdb_script_path}}/pre_demote.sh" ]; then
-    source "{{drdb_script_path}}/pre_demote.sh"
+if [ -f "{{ drdb_script_path }}/pre_demote.sh" ]; then
+    echo "executing before demote script" >> {{ drdb_log_path }}/demote.log
+    source "{{ drdb_script_path }}/pre_demote.sh" \
+    >> {{ drdb_log_path }}/demote.log
 fi
 
 devices=({{ drbd_resources_conf|map(attribute='device')|join(' ') }})
 
-cd ~
 # Unmount devices first
+echo "unmounting devices" >> {{ drdb_log_path }}/demote.log
 for device in "${devices[@]}"; do
     /bin/mount | grep -w $device  > /dev/null
     if [ $? -eq 0 ]; then
@@ -25,9 +30,20 @@ for device in "${devices[@]}"; do
 done
 
 # Demote all devices to secondary
+echo "demoting to secondary" >> {{ drdb_log_path }}/demote.log
 /sbin/drbdadm secondary all
 
-# Post demote script
-if [ -f "{{drdb_script_path}}/post_demote.sh" ]; then
-    source "{{drdb_script_path}}/post_demote.sh"
+role=$(/sbin/drbdadm role all)
+if [ "$role" == "Secondary" ]; then
+    if [ -f "{{ drdb_script_path }}/post_demote.sh" ]; then
+        echo "executing after demote script" >> {{ drdb_log_path }}/demote.log
+        source "{{ drdb_script_path }}/post_demote.sh" \
+        >> {{ drdb_log_path }}/demote.log
+    fi
+else
+    if [ -f "{{ drdb_script_path }}/failed_demote.sh" ]; then
+        echo "executing failed demote script" >> {{ drdb_log_path }}/demote.log
+        source "{{ drdb_script_path }}/failed_demote.sh" \
+        >> {{ drdb_log_path }}/demote.log
+    fi
 fi

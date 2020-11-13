@@ -1,0 +1,148 @@
+---
+- name: sync clock
+  hosts: 
+    - consul_servers
+    - haproxy_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup consul cluster
+  hosts: consul_servers
+  become: yes
+  roles: 
+    - name: consul
+      vars:
+        consul_config_options:
+          enable_local_script_checks: true
+          leave_on_terminate: true
+          rejoin_after_leave: true
+          log_level: INFO
+          log_rotate_max_files: 7
+          ui: true
+          dns_config:
+            enable_truncate: true
+            only_passing: true
+          acl:
+            enabled: true
+            enable_token_persistence: true
+            default_policy: deny
+          connect:
+            enabled: true
+          ca_file: >-
+            {{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem
+          cert_file: >-
+            {{ consul_certs_path }}/certs/{{ consul_datacenter }}-server-{{
+            consul_domain }}-0.pem
+          key_file: >-
+            {{ consul_certs_path }}/keys/{{ consul_datacenter }}-server-{{
+            consul_domain }}-0-key.pem
+          verify_incoming: true
+          verify_outgoing: true
+          verify_incoming_rpc: true
+          verify_server_hostname: true
+          encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
+          auto_encrypt:
+            allow_tls: true
+
+- name: setup haproxy cluster
+  hosts: haproxy_servers
+  become: yes
+  pre_tasks:
+    - name: allow binding of non-existing ip address
+      include_role:
+        name: keepalived
+        tasks_from: sysctl
+  roles: 
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          consul_cluster:
+            bind: 192.168.3.100:8500
+            acl:
+              - header_host_hostname hdr(host) -i -m beg consul.example.com
+              - header_host_ip hdr(host) -i -m beg 192.168.3.100
+            use_backend: >-
+              consul_servers if header_host_hostname || header_host_ip
+        haproxy_backends_config:
+          consul_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/status/leader
+            default-server: check inter 10s
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.consul_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + '8500') }}
+              {%- endfor -%}
+              {{ servers }}
+        haproxy_firewall_ports:
+          - 8404/tcp
+          - 8500/tcp
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == 
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if 
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and 
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy

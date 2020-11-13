@@ -1,16 +1,14 @@
-consul_zip_url: https://releases.hashicorp.com/consul/1.8.3/consul_1.8.3_linux_amd64.zip
-consul_zip_checksum: b72e9eac5405c691c2e3b50819900ca84a79f2f6e7d73aa91f2a336fc2bcacb0
+consul_version: 1.8.5
 consul_user: consul
 consul_group: consul
-consul_bin_path: /usr/local/bin
 consul_config_path: /etc/consul
 consul_config_file: config.json
-consul_configd_path: '{{ consul_config_path }}/consul.d'
+consul_configd_path: "{{ consul_config_path }}/consul.d"
 consul_data_path: /var/lib/consul
 consul_log_path: /var/log/consul
 consul_log_file: consul.log
 consul_run_path: /run/consul
-consul_certs_path: '{{ consul_config_path }}/consul.d/tls'
+consul_certs_path: "{{ consul_config_path }}/consul.d/tls"
 consul_agent_mode: server
 consul_datacenter: dc1
 consul_domain: consul
@@ -33,10 +31,14 @@ consul_config_options:
     enabled: true
     enable_token_persistence: true
     default_policy: deny
-  ca_path: '{{ consul_certs_path }}'
-  ca_file: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
-  cert_file: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0.pem'
-  key_file: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem'
+  ca_path: "{{ consul_certs_path }}/certs"
+  ca_file: "{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem"
+  cert_file: >-
+    {{ consul_certs_path }}/certs/{{ consul_datacenter }}-server-{{
+    consul_domain }}-0.pem
+  key_file: >-
+    {{ consul_certs_path }}/keys/{{ consul_datacenter }}-server-{{
+    consul_domain }}-0-key.pem
   verify_incoming: true
   verify_outgoing: true
   verify_incoming_rpc: true
@@ -48,7 +50,7 @@ consul_config_options:
 consul_commandline_options: []
 # example:
 # consul_commandline_options:
-#  - encrypt=WLpgAtkxNtQHR87SBS+wT5cpx83I238J5hlNuts1ZJo=
+#  - -encrypt=WLpgAtkxNtQHR87SBS+wT5cpx83I238J5hlNuts1ZJo=
 
 consul_env_vars: []
 

@@ -19,6 +19,10 @@
     state: started
   listen: start vault
 
+- name: unseal vault
+  shell: /etc/vault/scripts/unseal.sh
+  listen: unseal vault
+
 - name: restart firewalld
   service:
     name: firewalld

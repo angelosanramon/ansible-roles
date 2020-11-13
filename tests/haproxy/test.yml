@@ -1,6 +1,0 @@
----
-- name: create haproxy cluster
-  hosts: haproxy_servers
-  become: yes
-  roles:
-    - haproxy

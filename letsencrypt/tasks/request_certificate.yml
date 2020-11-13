@@ -37,6 +37,7 @@
       {{- certificate_path + '/' + certificate.common_name + '.csr' -}}
     privatekey_path: >-
       {{- certificate_path + '/' + certificate.common_name + '.pem' -}}
+  register: generate_csr
 
 - name: create acme challenge
   acme_certificate:

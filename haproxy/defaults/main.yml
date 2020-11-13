@@ -19,6 +19,7 @@ haproxy_match_process_cpu: false
 haproxy_global_config:
   maxconn: 10000
   log: 127.0.0.1 local0
+  tune.ssl.default-dh-param: 2048
 
 haproxy_defaults_config: {}
 # haproxy_defaults_config:

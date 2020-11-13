@@ -1,6 +1,6 @@
 ---
-keepalived_src_url: https://www.keepalived.org/software/keepalived-2.1.5.tar.gz
-keepalived_src_checksum: 27e1cfff5b8dd95062ad415957e663e5
+keepalived_version: 2.1.5
+keepalived_checksum: 27e1cfff5b8dd95062ad415957e663e5
 keepalived_config_path: /etc/keepalived
 keepalived_config_file: keepalived.conf
 keepalived_run_path: /run/keepalived

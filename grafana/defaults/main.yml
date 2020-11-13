@@ -1,5 +1,5 @@
-grafana_pkg_url: https://dl.grafana.com/oss/release/grafana-7.2.2-1.x86_64.rpm
-grafana_pkg_checksum: 13ff90e99a638a25badedfce24c9d6e818e03c9eb7f6f112ad00f897f09813ee
+grafana_version: 7.3.1
+grafana_checksum: 2521bcb612d3038afcb167d097d35c0a7e5d66956982b1239c582ff423bf1167
 grafana_user: grafana
 grafana_group: grafana
 grafana_config_path: /etc/grafana
@@ -11,8 +11,8 @@ grafana_log_file: grafana.log
 grafana_pid_path: /run/grafana
 grafana_pid_file: grafana-server.pid
 grafana_plugin_path: "{{ grafana_data_path }}/plugins"
-grafana_provisioning_path: "{{ grafana_config_path }}/provisioning"
-grafana_cert_path: "{{ grafana_config_path }}/tls"
+grafana_provisioning_path: "{{ grafana_home_path }}/conf/provisioning"
+grafana_certs_path: "{{ grafana_config_path }}/tls"
 grafana_servers_group_name: grafana_servers
 grafana_listen_port: 3000
 grafana_max_open_files: 10000

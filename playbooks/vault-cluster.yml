@@ -1,0 +1,255 @@
+---
+- name: sync clock
+  hosts: vault_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup drbd cluster
+  hosts: vault_servers
+  become: yes
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: vault_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: vault1.cluster.local
+                node-id: 0
+                address: 192.168.3.202:7788
+              - name: vault2.cluster.local
+                node-id: 1
+                address: 192.168.3.203:7788
+            connection-mesh:
+              hosts: vault1.cluster.local vault2.cluster.local
+  post_tasks:
+    - name: prepare resource device
+      include_role:
+        name: drbd
+        tasks_from: prep_resource_device
+      vars:
+        mountpoint_path: /var/lib/vault
+        mountpoint_owner: vault
+        mountpoint_group: vault
+        resource_device: /dev/drbd1
+        resource_device_filesystem: xfs
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          /sbin/pidof vault
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop vault
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof vault
+          if [ $? -ne 0 ]; then
+              /bin/systemctl start vault
+          fi
+
+          /etc/vault/scripts/unseal.sh
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -ne 0 ]; then 
+              /bin/mount /dev/drbd1 /var/lib/vault
+          fi
+
+          /sbin/pidof vault
+          if [ $? -ne 0 ]; then
+              /bin/systemctl start vault
+          fi
+
+          /etc/vault/scripts/unseal.sh
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: setup vault cluster
+  hosts: vault_servers
+  become: yes
+  pre_tasks:
+    - name: allow binding of non-existing ip address
+      include_role:
+        name: keepalived
+        tasks_from: sysctl
+  roles:
+    - name: vault
+      vars:
+        vault_config_options:
+          ui: true
+          listener:
+            - tcp:
+                address: 192.168.3.100:{{ vault_port }}
+                cluster_address: 192.168.3.100:{{ vault_cluster_port }}
+                tls_disable: true
+          storage:
+            file:
+              path: "{{ vault_data_path }}"
+          api_addr: http://192.168.3.100:{{ vault_port }}
+          log_level: info
+          log_format: standard
+          pid_file: "{{ vault_run_path }}/vault.pid"
+        vault_policies:
+          - name: vault_admin
+            policy: |-
+              path "sys/health"
+              {
+                capabilities = ["read", "sudo"]
+              }
+
+              path "sys/policies/acl"
+              {
+                capabilities = ["list"]
+              }
+
+              path "sys/policies/acl/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "auth/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/auth/*"
+              {
+                capabilities = ["create", "update", "delete", "sudo"]
+              }
+
+              path "sys/auth"
+              {
+                capabilities = ["read"]
+              }
+
+              path "secret/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts"
+              {
+                capabilities = ["read"]
+              }
+
+              path "kv/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+        vault_userpass_users:
+          - username: vault_admin
+            password: mypassword
+            token_policies:
+              - vault_admin
+
+- name: setup keepalived for vault cluster
+  hosts: vault_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_vault
+              script: "{{ keepalived_config_path }}/scripts/chk_vault.sh"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: VAULT_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.vault_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.vault_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == '192.168.3.0' -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.vault_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == '192.168.3.0' -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - 192.168.3.100
+              track_script:
+                - chk_vault
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create vault check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:8200/v1/sys/health)
+
+          if [ $stat_code -eq 200 ] ||
+          [ $stat_code -eq 501 ] ||
+          [ $stat_code -eq 503 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_vault.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived

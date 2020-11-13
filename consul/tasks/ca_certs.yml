@@ -6,20 +6,21 @@
 - block:
     - name: check CA cert exist
       stat:
-        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+        path: '{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem'
       register: ca_cert_check
 
     - name: check CA key exist
       stat:
-        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+        path: >-
+          {{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem
       register: ca_key_check
 
     - name: validate CA cert and key match
       shell: |-
-        keysha=$(openssl pkey -in {{ consul_domain }}-agent-ca-key.pem -pubout \
-          -outform pem || echo 'key invalid' | sha256sum)
-        certsha=$(openssl x509 -in {{ consul_domain }}-agent-ca.pem -pubkey \
-          -noout -outform pem || echo 'cert invalid' | sha256sum)
+        keysha=$(openssl pkey -in keys/{{ consul_domain }}-agent-ca-key.pem \
+        -pubout -outform pem || echo 'key invalid' | sha256sum)
+        certsha=$(openssl x509 -in certs/{{ consul_domain }}-agent-ca.pem \
+        -pubkey -noout -outform pem || echo 'cert invalid' | sha256sum)
         if [ "$certsha" == "$keysha" ]; then echo valid; else echo invalid; fi
       args:
         chdir: '{{ consul_certs_path }}'
@@ -31,7 +32,7 @@
 
     - name: load CA cert from CA file
       slurp:
-        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+        src: '{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem'
       register: ca_cert_content
       no_log: true
       when:
@@ -50,7 +51,7 @@
 
     - name: load CA key from CA key file
       slurp:
-        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+        src: '{{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem'
       register: ca_key_content
       no_log: true
       when:
@@ -71,27 +72,29 @@
 - block:
     - name: delete CA cert file
       file:
-        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+        path: '{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem'
         state: absent
 
     - name: delete CA key file
       file:
-        path: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+        path: >-
+          {{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem
         state: absent
 
     - name: generate new CA certificates
       shell: |-
-        {{ consul_bin_path }}/consul tls ca create \
-          {{ consul_tls_ca_create_options | join(' ') }}
+        /usr/local/bin/consul tls ca create \
+        {{ consul_tls_ca_create_options | join(' ') }}
         chown {{ consul_user }}:{{ consul_group }} {{ consul_domain }}-agent-ca*
         chmod 600 {{ consul_domain }}-agent-ca-key.pem
+        mv {{ consul_domain }}-agent-ca-key.pem ../keys
       args:
-        chdir: '{{ consul_certs_path }}'
+        chdir: '{{ consul_certs_path }}/certs'
       no_log: true
 
     - name: load new CA cert from new CA cert file
       slurp:
-        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+        src: '{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem'
       register: ca_cert_content
       no_log: true
 
@@ -102,7 +105,7 @@
 
     - name: load new CA key from new CA key file
       slurp:
-        src: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+        src: '{{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem'
       register: ca_key_content
       no_log: true
 
@@ -116,7 +119,7 @@
 - name: copy CA cert to all servers
   copy:
     content: '{{ ca_cert }}'
-    dest: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+    dest: '{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem'
     owner: '{{ consul_user }}'
     group: '{{ consul_group }}'
     mode: 0644
@@ -125,7 +128,7 @@
 - name: copy CA key to all servers
   copy:
     content: '{{ ca_key }}'
-    dest: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca-key.pem'
+    dest: '{{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem'
     owner: '{{ consul_user }}'
     group: '{{ consul_group }}'
     mode: 0600

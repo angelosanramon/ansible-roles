@@ -1,0 +1,17 @@
+#!/bin/bash
+
+function unseal {
+    /bin/curl --header "Content-Type: application/json" \
+    --request PUT --data "{\"key\":\"$1\"}" \
+    http://127.0.0.1:{{ vault_port }}/v1/sys/unseal
+}
+
+stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+http://127.0.0.1:{{ vault_port }}/v1/sys/health)
+if [ $stat_code -eq 503 ] && 
+[ -f {{ vault_config_path }}/.vault_unseal_keys ]; then
+    keys=$(cat {{ vault_config_path }}/.vault_unseal_keys)
+    for key in $keys; do
+        unseal $key
+    done
+fi

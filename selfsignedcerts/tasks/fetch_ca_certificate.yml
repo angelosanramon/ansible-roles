@@ -22,19 +22,3 @@
     owner: "{{ cert_owner|default(omit, true) }}"
     group: "{{ cert_group|default(omit, true) }}"
     mode: 0644
-
-- name: load server certificate to variable
-  slurp:
-    src: >-
-      {{- "%s/%s/%s.crt"|format(selfsignedcerts_certs_path, inventory_hostname,
-      inventory_hostname) -}}
-  register: server_cert
-  delegate_to: localhost
-
-- name: save server certificate to file
-  copy:
-    content: "{{ server_cert.content|b64decode }}"
-    dest: "{{ cert_path }}/{{ inventory_hostname }}.crt"
-    owner: "{{ cert_owner|default(omit, true) }}"
-    group: "{{ cert_group|default(omit, true) }}"
-    mode: 0644

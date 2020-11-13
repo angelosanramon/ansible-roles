@@ -1,0 +1,615 @@
+---
+- name: sync clock
+  hosts:
+    - prometheus_servers
+    - grafana_servers
+    - haproxy_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup drbd for prometheus cluster
+  hosts: prometheus_servers
+  become: yes
+  vars:
+    keepalived_vip: 192.168.3.101
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: prometheus_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: prometheus1.cluster.local
+                node-id: 0
+                address: 192.168.3.210:7788
+              - name: prometheus2.cluster.local
+                node-id: 1
+                address: 192.168.3.211:7788
+            connection-mesh:
+              hosts: prometheus1.cluster.local prometheus2.cluster.local
+  post_tasks:
+    - name: prepare resource device
+      include_role:
+        name: drbd
+        tasks_from: prep_resource_device
+      vars:
+        mountpoint_path: /var/lib/prometheus
+        mountpoint_owner: prometheus
+        mountpoint_group: prometheus
+        resource_device: /dev/drbd1
+        resource_device_filesystem: xfs
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "Skipping demote. keepalived VIP is attached."
+              exit 1
+          fi
+
+          /sbin/pidof prometheus > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "stopping prometheus server"
+              /bin/systemctl stop prometheus
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof prometheus > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "starting prometheus server"
+              /bin/systemctl start prometheus
+          fi
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd before promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "Skipping promote. keepalived VIP is not attached."
+              exit 1
+          fi
+        dest: /etc/drbd.d/scripts/pre_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after successful promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -eq 0 ]; then
+              echo "prometheus volume already mounted"
+          else
+              echo "mounting prometheus volume"
+              /bin/mount /dev/drbd1 /var/lib/prometheus
+          fi
+
+          echo "restarting prometheus server"
+          /bin/systemctl restart prometheus
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after failed promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop prometheus
+          fi
+
+          while true
+          do
+              ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+              if [ $? -ne 0 ]; then
+                  /bin/systemctl start prometheus
+                  break
+              fi
+          done
+        dest: /etc/drbd.d/scripts/failed_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: setup prometheus cluster
+  hosts: prometheus_servers
+  become: yes
+  roles:
+    - name: prometheus
+      include_vars: defaults/node_exporter.yml
+      vars:
+        prometheus_components:
+          alertmanager:
+            installed: true
+          node_exporter:
+            installed: true
+        prometheus_scrape_configs:
+          - job_name: prometheus
+            static_configs:
+              - targets: >-
+                  {%- set servers = [] -%}
+                  {%- for server in groups[prometheus_servers_group_name] -%}
+                    {{- servers.append(server + ':' +
+                    prometheus_web_listen_port|string) -}}
+                  {%- endfor-%}
+                  {{- servers -}}
+          - job_name: node exporters
+            static_configs:
+              - targets: >-
+                  {%- set servers = [] -%}
+                  {%- for server in groups[prometheus_servers_group_name] -%}
+                    {{- servers.append(server + ':' +
+                    node_exporter_web_listen_port|string) -}}
+                  {%- endfor-%}
+                  {{- servers -}}
+        prometheus_alertmanager_config:
+          - static_configs:
+            - targets: >-
+                  {%- set servers = [] -%}
+                  {%- for server in groups[prometheus_servers_group_name] -%}
+                    {{- servers.append(server + ':' +
+                    alertmanager_web_listen_port|string) -}}
+                  {%- endfor-%}
+                  {{- servers -}}
+        alertmanager_servers_group_name: prometheus_servers
+        alertmanager_route_config:
+          group_by:
+            - alertname
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 1h
+          receiver: web.hook
+        alertmanager_receivers_config:
+          - name: web.hook
+            webhook_configs:
+            - url: http://127.0.0.1:5001/
+
+- name: setup keepalived for prometheus cluster
+  hosts: prometheus_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.101
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_prometheus
+              script: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: PROMETHEUS_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.prometheus_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.prometheus_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.prometheus_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_prometheus
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create prometheus check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -L -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:9090/status)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_prometheus.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived
+
+- name: setup drbd for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  vars:
+    keepalived_vip: 192.168.3.102
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: grafana_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: grafana1.cluster.local
+                node-id: 0
+                address: 192.168.3.208:7788
+              - name: grafana2.cluster.local
+                node-id: 1
+                address: 192.168.3.209:7788
+            connection-mesh:
+              hosts: grafana1.cluster.local grafana2.cluster.local
+  post_tasks:
+    - name: prepare resource device
+      include_role:
+        name: drbd
+        tasks_from: prep_resource_device
+      vars:
+        mountpoint_path: /var/lib/grafana
+        mountpoint_owner: grafana
+        mountpoint_group: grafana
+        resource_device: /dev/drbd1
+        resource_device_filesystem: xfs
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "Skipping demote. keepalived VIP is attached."
+              exit 1
+          fi
+
+          /sbin/pidof grafana-server > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "stopping grafana server"
+              /bin/systemctl stop grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof grafana-server > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "starting grafana server"
+              /bin/systemctl start grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd before promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "Skipping promote. keepalived VIP is not attached."
+              exit 1
+          fi
+        dest: /etc/drbd.d/scripts/pre_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after successful promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -eq 0 ]; then
+              echo "grafana volume already mounted"
+          else
+              echo "mounting grafana volume"
+              /bin/mount /dev/drbd1 /var/lib/grafana
+          fi
+
+          echo "restarting grafana server"
+          /bin/systemctl restart grafana-server
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after failed promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop grafana-server
+          fi
+
+          while true
+          do
+              ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+              if [ $? -ne 0 ]; then
+                  /bin/systemctl start grafana-server
+                  break
+              fi
+          done
+        dest: /etc/drbd.d/scripts/failed_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: setup grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: grafana
+      vars:
+        grafana_configs:
+          security:
+            admin_user: grafana_admin
+            admin_password: mypassword
+
+- name: setup keepalived for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.102
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_grafana
+              script: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: GRAFANA_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.grafana_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.grafana_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 2
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.grafana_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_grafana
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create grafana check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:3000/api/health)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived
+
+- name: setup haproxy for prometheus and grafana cluster
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == 
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 3
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          prometheus_cluster:
+            bind: 192.168.3.100:9090
+            acl: >-
+              header_host_hostname hdr(host) -i -m beg prometheus.apsrnet.com
+            use_backend: prometheus_servers if header_host_hostname
+          alertmanager_cluster:
+            bind: 192.168.3.100:9093
+            acl: >-
+              header_host_hostname hdr(host) -i -m beg alertmanager.apsrnet.com
+            use_backend: alertmanager_servers if header_host_hostname
+          grafana_cluster:
+            bind: 192.168.3.100:3000
+            acl: >-
+              header_host_hostname hdr(host) -i -m beg grafana.apsrnet.com
+            use_backend: grafana_servers if header_host_hostname
+        haproxy_backends_config:
+          prometheus_servers:
+            balance: first
+            option: httpchk GET /status
+            default-server: check inter 10s
+            server: prometheus 192.168.3.101:9090
+          alertmanager_servers:
+            balance: first
+            option: httpchk GET /#/status
+            default-server: check inter 10s
+            server: alertmanager 192.168.3.101:9093
+          grafana_servers:
+            balance: first
+            option: httpchk GET /api/health
+            default-server: check inter 10s
+            server: grafana 192.168.3.102:3000
+        haproxy_firewall_ports:
+          - 9090/tcp
+          - 9093/tcp
+          - 3000/tcp
+          - 8404/tcp
+  post_tasks:
+    - name: install node exporter
+      include_role:
+        name: prometheus
+        tasks_from: node_exporter_install.yml
+        defaults_from: main/node_exporter.yml
+      vars:
+        node_exporter_cmdline_options:
+          - --collector.systemd
+
+    - name: install haproxy exporter
+      include_role:
+        name: prometheus
+        tasks_from: haproxy_exporter_install.yml
+        defaults_from: main/haproxy_exporter.yml

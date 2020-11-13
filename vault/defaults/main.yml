@@ -1,5 +1,4 @@
-vault_zip_url: https://releases.hashicorp.com/vault/1.5.3/vault_1.5.3_linux_amd64.zip
-vault_zip_checksum: 1ec61ff4d0b7ed774ba6f71829596afd8c8bf1d72c97305f4692001cef8910b2
+vault_version: 1.6.0
 vault_user: vault
 vault_group: vault
 vault_bin_path: /usr/local/bin

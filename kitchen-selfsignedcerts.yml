@@ -1,8 +1,6 @@
 ---
 driver:
   name: vagrant
-  customize:
-    memory: 1024
 
 provisioner:
   name: shell
@@ -15,17 +13,16 @@ suites:
     provisioner:
       name: ansible_playbook
       roles_path: .
-      #ansible_inventory: tests/selfsignedcerts/inventory
-      hosts: myhost
-      playbook: tests/selfsignedcerts/selfsignedcerts.yml
+      ansible_inventory: hosts
+      playbook: playbooks/selfsignedcerts.yml
       ansible_playbook_command: >-
         ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant"
         --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
-        -o StrictHostKeyChecking=no" -i localhost
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts
         /tmp/kitchen/selfsignedcerts.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:
       vm_hostname: ansible.cluster.local
       network:
-        - ["private_network", {ip: "192.168.1.50"}]
+        - ["private_network", {ip: "192.168.1.254"}]

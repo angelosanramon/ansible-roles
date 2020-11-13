@@ -1,0 +1,86 @@
+---
+driver:
+  name: vagrant
+
+provisioner:
+  name: shell
+
+platforms:
+  - name: centos/8
+
+suites:
+  - name: consul1
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: consul1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.10"}]
+  - name: consul2
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: consul2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.2.10"}]
+  - name: consul3
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: consul3.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.3.10"}]
+  - name: vault1
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: vault1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.11"}]
+  - name: vault2
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: vault2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.2.11"}]
+  - name: haproxy1
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: haproxy1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.250"}]
+        - ["private_network", {ip: "192.168.3.204"}]
+  - name: haproxy2
+    provisioner:
+      command: >
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      vm_hostname: haproxy2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.2.250"}]
+        - ["private_network", {ip: "192.168.3.205"}]
+  - name: ansible
+    provisioner:
+      name: ansible_playbook
+      roles_path: .
+      ansible_inventory: hosts
+      playbook: playbooks/vault-consul-cluster.yml
+      ansible_playbook_command: >-
+        ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant" 
+        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts 
+        /tmp/kitchen/vault-consul-cluster.yml
+      require_chef_for_busser: false
+      max_retries: 5
+    driver_config:
+      vm_hostname: ansible.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.254"}]

@@ -1,0 +1,469 @@
+---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: email@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name:
+              - consul.example.com
+              - vault.example.com
+            valid_days: 7
+    - name: selfsignedcerts
+      vars:
+        selfsignedcerts_server_certificates:
+          - common_name: vault1.cluster.local
+            subject_alt_names:
+              - IP:192.168.1.11
+          - common_name: vault2.cluster.local
+            subject_alt_names:
+              - IP:192.168.2.11
+          - common_name: haproxy1.cluster.local
+            subject_alt_names:
+              - IP:192.168.1.250
+          - common_name: haproxy2.cluster.local
+            subject_alt_names:
+              - IP:192.168.2.250
+
+- name: sync clock
+  hosts:
+    - consul_servers
+    - vault_servers
+    - haproxy_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup consul cluster
+  hosts: consul_servers
+  become: yes
+  vars:
+  pre_tasks:
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_ca_certificate.yml
+      vars:
+        cert_path: "{{ consul_certs_path }}/certs"
+        cert_owner: "{{ consul_user }}"
+        cert_group: "{{ consul_group }}"
+      register: copy_self_signed_certs
+  roles: 
+    - name: consul
+      vars:
+        consul_config_options:
+          enable_local_script_checks: true
+          leave_on_terminate: true
+          rejoin_after_leave: true
+          log_level: INFO
+          log_rotate_max_files: 7
+          ui: true
+          dns_config:
+            enable_truncate: true
+            only_passing: true
+          acl:
+            enabled: true
+            enable_token_persistence: true
+            default_policy: deny
+          connect:
+            enabled: true
+          ca_path: "{{ consul_certs_path }}/certs"
+          cert_file: >-
+            {{ consul_certs_path }}/certs/{{ consul_datacenter }}-server-{{
+            consul_domain }}-0.pem
+          key_file: >-
+            {{ consul_certs_path }}/keys/{{ consul_datacenter }}-server-{{
+            consul_domain }}-0-key.pem
+          verify_incoming: true
+          verify_outgoing: true
+          verify_incoming_rpc: true
+          verify_server_hostname: true
+          encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
+          auto_encrypt:
+            allow_tls: true
+          ports:
+            https: 8501
+        consul_acl_policies:
+          - Name: vault_policy
+            Description: Policy for Vault access
+            Rules: |-
+              key_prefix "vault/" {
+                policy = "write"
+              }
+              node_prefix "" {
+                policy = "write"
+              }
+              service "vault" {
+                policy = "write"
+              }
+              agent_prefix "" {
+                policy = "write"
+              }
+              session_prefix "" {
+                policy = "write"
+              }
+          - Name: consul_agent_policy
+            Description: Policy for Consul agent node
+            Rules: |-
+              agent_prefix "" {
+                policy = "write"
+              }
+              node_prefix "" {
+                policy = "write"
+              }
+              service_prefix "" {
+                policy = "read"
+              }
+              session_prefix "" {
+                policy = "read"
+              }
+        consul_acl_tokens:
+          - SecretID: cc542a4d-3207-44a4-9d73-c0ac840439e9
+            Description: Token for Vault access
+            Policies:
+              - Name: vault_policy
+          - SecretID: 87106a90-47e3-43eb-b1ca-86eec7ca1497
+            Description: Token for Consul agent
+            Policies:
+              - Name: consul_agent_policy
+  post_tasks:
+    - name: get consul ca certificate from one of the consul server
+      fetch:
+        src: "{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem"
+        dest: /tmp/{{ consul_domain }}-agent-ca.pem
+        flat: yes
+      run_once: yes
+
+    - name: restart consul
+      service:
+        name: consul
+        state: restarted
+      when: copy_self_signed_certs is changed
+
+- name: setup vault cluster
+  hosts: vault_servers
+  become: yes
+  pre_tasks:
+    - name: create consul user group
+      group:
+        name: "{{ consul_user }}"
+        state: present
+
+    - name: create consul user
+      user:
+        name: "{{ consul_user }}"
+        group: "{{ consul_group }}"
+
+    - name: create consul tls directory
+      file:
+        path: "{{ consul_certs_path }}"
+        state: directory
+        owner: "{{ consul_user }}"
+        group: "{{ consul_group }}"
+
+    - name: copy consul ca certificate to vault servers
+      copy:
+        src: /tmp/consul-agent-ca.pem
+        dest: "{{ consul_certs_path }}/consul-agent-ca.pem"
+        owner: "{{ consul_user }}"
+        group: "{{ consul_group }}"
+        mode: 0644
+      register: copy_consul_ca_certificate
+
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certskeys.yml
+      vars:
+        cert_path: "{{ vault_certs_path }}"
+        cert_owner: "{{ vault_user }}"
+        cert_group: "{{ vault_group }}"
+      register: copy_self_signed_certs
+  roles:
+    - name: consul
+      vars:
+        consul_config_options:
+          leave_on_terminate: true
+          rejoin_after_leave: true
+          log_level: INFO
+          log_rotate_max_files: 7
+          acl:
+            enabled: true
+            enable_token_persistence: true
+            default_policy: deny
+            tokens:
+              agent: 87106a90-47e3-43eb-b1ca-86eec7ca1497
+          auto_encrypt:
+            tls: true
+          ca_file: '{{ consul_certs_path }}/{{ consul_domain }}-agent-ca.pem'
+          verify_incoming: true
+          verify_outgoing: true
+          verify_incoming_rpc: true
+          verify_server_hostname: true
+          encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
+          start_join: >-
+            {{- groups.consul_servers|map('extract', hostvars, 'ansible_host')|
+              list -}}
+          retry_join: >-
+            {{- groups.consul_servers|map('extract', hostvars, 'ansible_host')|
+              list -}}
+        consul_agent_mode: client
+    - name: vault
+      vars:
+        vault_auto_unseal: true
+        vault_config_options:
+          ui: true
+          listener:
+            - tcp:
+                address: "{{ ansible_host}}:{{ vault_port }}"
+                cluster_address: "{{ ansible_host }}:{{ vault_cluster_port }}"
+                tls_cert_file: >-
+                  {{ vault_certs_path }}/{{ inventory_hostname }}.crt
+                tls_key_file: >-
+                  {{ vault_certs_path }}/{{ inventory_hostname }}.key
+          storage:
+            consul:
+              address: 127.0.0.1:8500
+              token: cc542a4d-3207-44a4-9d73-c0ac840439e9
+          api_addr: https://{{ ansible_host}}:{{ vault_port }}
+          cluster_addr: 'https://{{ ansible_host }}:{{ vault_cluster_port }}'
+          log_level: info
+          log_format: standard
+          pid_file: '{{ vault_run_path }}/vault.pid'
+        vault_policies:
+          - name: vault_admin
+            policy: |-
+              path "sys/health"
+              {
+                capabilities = ["read", "sudo"]
+              }
+
+              path "sys/policies/acl"
+              {
+                capabilities = ["list"]
+              }
+
+              path "sys/policies/acl/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "auth/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/auth/*"
+              {
+                capabilities = ["create", "update", "delete", "sudo"]
+              }
+
+              path "sys/auth"
+              {
+                capabilities = ["read"]
+              }
+
+              path "secret/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+
+              path "sys/mounts"
+              {
+                capabilities = ["read"]
+              }
+
+              path "kv/*"
+              {
+                capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+              }
+        vault_userpass_users:
+          - username: vault_admin
+            password: mypassword
+            token_policies:
+              - vault_admin
+  post_tasks:
+    - name: reload consul
+      service:
+        name: consul
+        state: reloaded
+      when: copy_consul_ca_certificate is changed
+
+    - name: reload vault
+      service:
+        name: vault
+        state: reloaded
+      when: copy_self_signed_certs is changed
+
+- name: setup haproxy cluster for vault and consul
+  hosts: haproxy_servers
+  become: yes
+  pre_tasks:
+    - name: allow binding of non-existing ip address
+      include_role:
+        name: keepalived
+        tasks_from: sysctl
+
+    - name: copy letsencrypt certificates to haproxy servers
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ haproxy_certs_path }}"
+        cert_owner: "{{ haproxy_user }}"
+        cert_group: "{{ haproxy_group }}"
+        domain_name: example.com
+
+    - name: copy consul ca certificate to haproxy servers
+      copy:
+        src: /tmp/consul-agent-ca.pem
+        dest: "{{ haproxy_certs_path }}/consul-agent-ca.pem"
+        owner: "{{ haproxy_user }}"
+        group: "{{ haproxy_group }}"
+        mode: 0644
+      register: copy_consul_ca_certificate
+
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certskeys.yml
+      vars:
+        cert_path: "{{ haproxy_certs_path }}"
+        cert_owner: "{{ haproxy_user }}"
+        cert_group: "{{ haproxy_group }}"
+      register: copy_self_signed_certs
+  roles:
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          consul_cluster:
+            bind: >-
+              192.168.3.100:8500 ssl crt 
+              {{ haproxy_certs_path }}/example.com.pem
+            acl: header_host_hostname hdr(host) -i -m beg consul.example.com
+            use_backend: consul_servers if header_host_hostname
+          vault_cluster:
+            bind: >-
+              192.168.3.100:8200 ssl crt
+              {{ haproxy_certs_path }}/example.com.pem
+            acl:
+              - header_host_hostname hdr(host) -i -m beg vault.example.com
+            use_backend: >-
+              vault_servers if header_host_hostname
+        haproxy_backends_config:
+          consul_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/status/leader
+            default-server: >-
+              check inter 10s ssl
+              ca-file {{ haproxy_certs_path }}/consul-agent-ca.pem
+              crt {{ haproxy_certs_path }}/{{ inventory_hostname }}.pem
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.consul_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + '8501') }}
+              {%- endfor -%}
+              {{ servers }}
+          vault_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/sys/health
+            http-check: expect status 200,429
+            default-server: >-
+              check inter 10s ssl ca-file {{ haproxy_certs_path }}/ca.crt
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.vault_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + '8200') }}
+              {%- endfor -%}
+              {{ servers }}
+        haproxy_firewall_ports:
+          - 8404/tcp
+          - 8500/tcp
+          - 8200/tcp
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 5
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_LB
+              interface: |-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == 
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if 
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and 
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy
+  post_tasks:
+    - name: reload haproxy
+      service:
+        name: haproxy
+        state: reloaded
+      when: copy_self_signed_certs is changed or 
+            copy_consul_ca_certificate is changed

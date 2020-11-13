@@ -63,60 +63,6 @@ suites:
             device: 0
             type: hdd
             medium: /tmp/drbd2.vdi
-  - name: grafana1
-    provisioner:
-      command: |-
-        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
-        /etc/ssh/sshd_config && sudo systemctl restart sshd
-        if [ ! -b /dev/sdb1 ]; then
-            sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
-        fi
-    driver_config:
-      vm_hostname: grafana1.cluster.local
-      network:
-        - ["private_network", {ip: "192.168.1.13"}]
-        - ["private_network", {ip: "192.168.3.208"}]
-      customize:
-        memory: 1024
-        createhd:
-          - filename: /tmp/drbd3.vdi
-            size: 10240
-        storagectl:
-          - name: IDE
-            portcount: 2
-        storageattach:
-          - storagectl: IDE
-            port: 1
-            device: 0
-            type: hdd
-            medium: /tmp/drbd3.vdi
-  - name: grafana2
-    provisioner:
-      command: |-
-        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
-        /etc/ssh/sshd_config && sudo systemctl restart sshd
-        if [ ! -b /dev/sdb1 ]; then
-            sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
-        fi
-    driver_config:
-      vm_hostname: grafana2.cluster.local
-      network:
-        - ["private_network", {ip: "192.168.2.13"}]
-        - ["private_network", {ip: "192.168.3.209"}]
-      customize:
-        memory: 1024
-        createhd:
-          - filename: /tmp/drbd4.vdi
-            size: 10240
-        storagectl:
-          - name: IDE
-            portcount: 2
-        storageattach:
-          - storagectl: IDE
-            port: 1
-            device: 0
-            type: hdd
-            medium: /tmp/drbd4.vdi
   - name: haproxy1
     provisioner:
       command: |-
@@ -127,8 +73,6 @@ suites:
       network:
         - ["private_network", {ip: "192.168.1.250"}]
         - ["private_network", {ip: "192.168.3.212"}]
-      customize:
-        memory: 1024
   - name: haproxy2
     provisioner:
       command: |-
@@ -139,19 +83,17 @@ suites:
       network:
         - ["private_network", {ip: "192.168.2.250"}]
         - ["private_network", {ip: "192.168.3.213"}]
-      customize:
-        memory: 1024
   - name: ansible
     provisioner:
       name: ansible_playbook
       roles_path: .
       ansible_inventory: hosts
-      playbook: playbooks/prometheus-grafana-cluster.yml
+      playbook: playbooks/prometheus-cluster.yml
       ansible_playbook_command: >-
         ansible-playbook -e "ansible_user=vagrant 
         ansible_password=vagrant" --ssh-extra-args="-o ConnectTimeout=10 
         -o ConnectionAttempts=60 -o StrictHostKeyChecking=no" 
-        -i /tmp/kitchen/hosts /tmp/kitchen/prometheus-grafana-cluster.yml
+        -i /tmp/kitchen/hosts /tmp/kitchen/prometheus-cluster.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:

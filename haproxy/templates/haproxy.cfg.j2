@@ -33,10 +33,10 @@
 {%-     for sub_key, sub_value in value.items() -%}
 {%-       if sub_value|type_debug == 'list' -%}
 {%-         for item in sub_value -%}
-{{            configs.append("    %-20s"|format(sub_key) + item|string) }}
+{{            configs.append("    %-30s"|format(sub_key) + item|string) }}
 {%-         endfor -%}
 {%-       else -%}
-{{          configs.append("    %-20s"|format(sub_key) + sub_value|string) }}
+{{          configs.append("    %-30s"|format(sub_key) + sub_value|string) }}
 {%-       endif -%}
 {%-    endfor -%}
 {%-   endfor -%}

@@ -1,0 +1,36 @@
+- name: create mountpoint user group
+  group:
+    name: "{{ mountpoint_owner }}"
+    state: present
+  when: mountpoint_owner is defined and mountpoint_owner != ""
+
+- name: create mountpoint user
+  user:
+    name: "{{ mountpoint_owner }}"
+    group: "{{ mountpoint_group }}"
+
+- name: create mountpoint path
+  file:
+    path: "{{ mountpoint_path }}"
+    state: directory
+    owner: "{{ mountpoint_owner }}"
+    group: "{{ mountpoint_group }}"
+
+- name: get drbd role
+  shell: /sbin/drbdadm drbdadm role drbd1
+  register: role
+  changed_when: false
+
+- block:
+    - name: format resource device
+      filesystem:
+        fstype: "{{ resource_device_filesystem }}"
+        dev: "{{ resource_device }}"
+
+    - name: mount resource device to mount point
+      mount:
+        path: "{{ mountpoint_path }}"
+        src: "{{ resource_device }}"
+        fstype: "{{ resource_device_filesystem }}"
+        state: mounted
+  when: role.stdout == 'Primary'

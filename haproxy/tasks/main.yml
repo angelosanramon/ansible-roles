@@ -1,9 +1,12 @@
 ---
-- name: perform pre-install tasks
-  include_tasks: preinstall.yml
+- name: set hosts file
+  include_tasks: hostsfile.yml
 
 - name: build and install haproxy
   include_tasks: install.yml
+
+- name: enable firewalld
+  include_tasks: firewalld.yml
 
 - name: configure logrotate
   include_tasks: logrotate.yml

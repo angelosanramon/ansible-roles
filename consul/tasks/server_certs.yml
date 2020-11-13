@@ -1,17 +1,25 @@
 - name: check server cert exist
   stat:
-    path: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0.pem'
+    path: >-
+      {{ consul_certs_path }}/certs/{{ consul_datacenter }}-server-{{
+      consul_domain }}-0.pem
   register: server_cert_check
 
 - name: check server key exist
   stat:
-    path: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem'
+    path: >-
+      {{ consul_certs_path }}/keys/{{ consul_datacenter }}-server-{{
+      consul_domain }}-0-key.pem
   register: server_key_check
 
 - name: validate server cert and key match
-  shell: |
-    keysha=$(openssl pkey -in {{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem -pubout -outform pem || echo 'key invalid' | sha256sum)
-    certsha=$(openssl x509 -in {{ consul_datacenter }}-server-{{ consul_domain }}-0.pem -pubkey -noout -outform pem || echo 'cert invalid' | sha256sum)
+  shell: |-
+    keysha=$(openssl pkey -in \
+    keys/{{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem \
+    -pubout -outform pem || echo 'key invalid' | sha256sum)
+    certsha=$(openssl x509 -in \
+    certs/{{ consul_datacenter }}-server-{{ consul_domain }}-0.pem \
+    -pubkey -noout -outform pem || echo 'cert invalid' | sha256sum)
     if [ "$certsha" == "$keysha" ]; then echo valid; else echo invalid; fi
   args:
     chdir: '{{ consul_certs_path }}'
@@ -22,10 +30,12 @@
   changed_when: false
 
 - name: validate CA and server certs match
-  shell: |
-    openssl verify -verbose -CAfile {{ consul_domain }}-agent-ca.pem {{ consul_datacenter }}-server-{{ consul_domain }}-0.pem > /dev/null 2>&1 && echo 'valid' || echo 'invalid'
+  shell: |-
+    openssl verify -verbose -CAfile {{ consul_domain }}-agent-ca.pem \
+    {{ consul_datacenter }}-server-{{ consul_domain }}-0.pem \
+    > /dev/null 2>&1 && echo 'valid' || echo 'invalid'
   args:
-    chdir: '{{ consul_certs_path }}'
+    chdir: '{{ consul_certs_path }}/certs'
   register: ca_server_cert_validation
   when: 
     - server_cert_check.stat.exists
@@ -37,25 +47,34 @@
   block:
     - name: delete {{ consul_datacenter }}-server-{{ consul_domain }}-0.pem
       file:
-        path: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0.pem'
+        path: >-
+          {{ consul_certs_path }}/certs/{{ consul_datacenter }}-server-{{
+          consul_domain }}-0.pem
         state: absent
 
     - name: delete {{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem
       file:
-        path: '{{ consul_certs_path }}/{{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem'
+        path: >-
+          {{ consul_certs_path }}/keys/{{ consul_datacenter }}-server-{{
+          consul_domain }}-0-key.pem
         state: absent
 
     - name: generate new server certs
       shell: |
-        {{ consul_bin_path }}/consul tls cert create -server \
+        /usr/local/bin/consul tls cert create -server \
         -dc={{ consul_datacenter }} \
         -domain={{ consul_domain }} \
-        {{ consul_tls_cert_create_options | reject('search','-ca=') | reject('search','-key=') | reject('search','-client') | reject('search','-server') | reject('search','-dc') | reject('search','-domain') | list | join(' ') }}
-        chown {{ consul_user }}:{{ consul_group }} {{ consul_datacenter }}-server-{{ consul_domain }}-0*
+        -key={{ consul_certs_path }}/keys/{{ consul_domain }}-agent-ca-key.pem \
+        {{ consul_tls_cert_create_options|reject('search','-ca=')|
+        reject('search','-key=')|reject('search','-client')|
+        reject('search','-server')|reject('search','-dc')|
+        reject('search','-domain')|list|join(' ') }}
+        chown {{ consul_user }}:{{ consul_group }} \
+        {{ consul_datacenter }}-server-{{ consul_domain }}-0*
         chmod 600 {{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem
+        mv {{ consul_datacenter }}-server-{{ consul_domain }}-0-key.pem ../keys
       args:
-        chdir: '{{ consul_certs_path }}'
-      no_log: true
+        chdir: '{{ consul_certs_path }}/certs'
   when: not server_cert_check.stat.exists or 
         not server_key_check.stat.exists or 
         server_cert_validation.stdout == 'invalid' or 

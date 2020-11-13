@@ -1,3 +1,9 @@
+{%- set options = consul_commandline_options |
+   reject('search','-config-file') |
+   reject('search','-config-dir') |
+   reject('search','-pid-file') | list 
+-%}
+
 ### BEGIN INIT INFO
 # Provides:          consul
 # Required-Start:    $local_fs $remote_fs
@@ -20,32 +26,19 @@ PIDFile={{ consul_run_path }}/consul.pid
 PermissionsStartOnly=true
 ExecStartPre=-/bin/mkdir -m 0750 -p {{ consul_run_path }}
 ExecStartPre=/bin/chown -R {{ consul_user }}:{{ consul_group }} {{ consul_run_path }}
-ExecStart={{ consul_bin_path }}/consul agent \
+ExecStart=/usr/local/bin/consul agent \
     -config-dir={{ consul_configd_path}} \
     -config-file={{ consul_config_path }}/{{ consul_config_file }} \
-    -pid-file={{ consul_run_path }}/consul.pid \
-    {% set options = consul_commandline_options |
-    reject('search','config-file') |
-    reject('search','config-dir') |
-    reject('search','pid-file') | list %}
-    {%- set new_options = [] -%}
-    {%- for option in options -%}
-    {%- if option[0] == '-' -%}
-    {{ new_options.append(option) }}
-    {%- else -%}
-    {{ new_options.append('-' + option) }}
-    {%- endif -%}
-    {%- endfor -%}
-    {{ new_options | join(' \\\n    ') }}
+    -pid-file={{ consul_run_path }}/consul.pid
+    {{- ' \\\n    ' if options|length > 0 else '' -}}
+    {{- options|join(' \\\n    ') + '\n' -}}
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 KillSignal=SIGTERM
 Restart=on-failure
 RestartSec=30s
-StandardOutput=null
-StandardError=null
 {% for var in consul_env_vars %}
-Environment={{ var }}
+Environment="{{ var }}"
 {% endfor %}
 LimitNOFILE=65536
 AmbientCapabilities=CAP_NET_BIND_SERVICE

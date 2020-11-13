@@ -37,8 +37,7 @@
 
 - block:
     - name: generate new encrypt keyring
-      shell: |
-        {{ consul_bin_path }}/consul keygen
+      shell: /usr/local/bin/consul keygen
       register: keygen_result
       no_log: true
 

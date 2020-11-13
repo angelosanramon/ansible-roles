@@ -1,0 +1,236 @@
+---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: email@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name: 
+              - consul.example.com
+            valid_days: 7
+    - name: selfsignedcerts
+      vars:
+        selfsignedcerts_server_certificates:
+          - common_name: haproxy1.cluster.local
+            subject_alt_names:
+              - IP:192.168.1.250
+          - common_name: haproxy2.cluster.local
+            subject_alt_names:
+              - IP:192.168.2.250
+
+- name: sync clock
+  hosts: 
+    - consul_servers
+    - haproxy_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup consul cluster
+  hosts: consul_servers
+  become: yes
+  pre_tasks:
+      - name: copy self signed certificates
+        include_role:
+          name: selfsignedcerts
+          tasks_from: fetch_ca_certificate.yml
+        vars:
+          cert_path: "{{ consul_certs_path }}/certs"
+          cert_owner: "{{ consul_user }}"
+          cert_group: "{{ consul_group }}"
+        register: copy_self_signed_certs
+  roles: 
+    - name: consul
+      vars:
+        consul_config_options:
+          enable_local_script_checks: true
+          leave_on_terminate: true
+          rejoin_after_leave: true
+          log_level: INFO
+          log_rotate_max_files: 7
+          ui: true
+          dns_config:
+            enable_truncate: true
+            only_passing: true
+          acl:
+            enabled: true
+            enable_token_persistence: true
+            default_policy: deny
+          connect:
+            enabled: true
+          ca_path: "{{ consul_certs_path }}/certs"
+          cert_file: >-
+            {{- consul_certs_path + '/certs/' + consul_datacenter +
+            '-server-' + consul_domain + '-0.pem' -}}
+          key_file: >-
+            {{- consul_certs_path + '/keys/' + consul_datacenter + 
+            '-server-' + consul_domain + '-0-key.pem' -}}
+          verify_incoming: true
+          verify_outgoing: true
+          verify_incoming_rpc: true
+          verify_server_hostname: true
+          encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
+          auto_encrypt:
+            allow_tls: true
+          ports:
+            https: 8501
+  post_tasks:
+    - name: get consul ca certificate from one of the consul server
+      fetch:
+        src: "{{ consul_certs_path }}/certs/{{ consul_domain }}-agent-ca.pem"
+        dest: /tmp/{{ consul_domain }}-agent-ca.pem
+        flat: yes
+      run_once: yes
+
+    - name: restart consul
+      service:
+        name: consul
+        state: restarted
+      when: copy_self_signed_certs is changed
+
+- name: setup haproxy cluster
+  hosts: haproxy_servers
+  become: yes
+  pre_tasks:
+    - name: allow binding of non-existing ip address
+      include_role:
+        name: keepalived
+        tasks_from: sysctl
+
+    - name: copy letsencrypt certificates to haproxy servers
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ haproxy_certs_path }}"
+        cert_owner: "{{ haproxy_user }}"
+        cert_group: "{{ haproxy_group }}"
+        domain_name: example.com
+      register: copy_letsencrypt_certs
+
+    - name: copy consul ca certificate to haproxy servers
+      copy:
+        src: /tmp/consul-agent-ca.pem
+        dest: "{{ haproxy_certs_path }}/consul-agent-ca.pem"
+        owner: "{{ haproxy_user }}"
+        group: "{{ haproxy_group }}"
+        mode: 0644
+      register: copy_consul_ca_certificate
+
+    - name: copy self signed certificates
+      include_role:
+        name: selfsignedcerts
+        tasks_from: fetch_certskeys.yml
+      vars:
+        cert_path: "{{ haproxy_certs_path }}"
+        cert_owner: "{{ haproxy_user }}"
+        cert_group: "{{ haproxy_group }}"
+      register: copy_self_signed_certs
+  roles: 
+    - name: haproxy
+      vars:
+        haproxy_defaults_config:
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+          log: global
+          mode: http
+          option: httplog
+        haproxy_frontends_config:
+          consul_cluster:
+            bind: >-
+              192.168.3.100:8500 ssl crt 
+              {{ haproxy_certs_path }}/example.com.pem
+            acl: header_host_hostname hdr(host) -i -m beg consul.example.com
+            use_backend: consul_servers if header_host_hostname
+        haproxy_backends_config:
+          consul_servers:
+            balance: roundrobin
+            option: httpchk GET /v1/status/leader
+            default-server: >-
+              check inter 10s ssl
+              ca-file {{ haproxy_certs_path }}/consul-agent-ca.pem
+              crt {{ haproxy_certs_path }}/{{ inventory_hostname }}.pem
+            server: >-
+              {%- set servers = [] -%}
+              {%- for hostname in groups.consul_servers -%}
+              {{ servers.append(hostname + ' ' +
+                hostvars[hostname].ansible_host + ':' + '8501') }}
+              {%- endfor -%}
+              {{ servers }}
+        haproxy_firewall_ports:
+          - 8404/tcp
+          - 8500/tcp
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first == 
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if 
+                  value.ipv4.network is defined and 
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if 
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and 
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy
+  post_tasks:
+    - name: reload haproxy
+      service:
+        name: haproxy
+        state: reloaded
+      when: copy_self_signed_certs is changed or 
+            copy_consul_ca_certificate is changed

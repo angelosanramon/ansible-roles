@@ -1,6 +1,0 @@
----
-- name: create vault cluster
-  hosts: vault_servers
-  become: yes
-  roles:
-    - vault

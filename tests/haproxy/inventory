@@ -1,3 +1,0 @@
-[haproxy_servers]
-haproxy1.cluster.local   ansible_host=192.168.1.40
-haproxy2.cluster.local   ansible_host=192.168.2.40

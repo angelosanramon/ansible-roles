@@ -1,16 +1,16 @@
 ---
 - name: install build dependencies
   package:
-    name: '{{ item }}'
+    name: "{{ item }}"
     state: present
-  with_items: '{{ keepalived_build_dependencies }}'
+  with_items: "{{ keepalived_build_dependencies }}"
 
 - name: create keepalived directories
   file:
-    path: '{{ item }}'
+    path: "{{ item }}"
     state: directory
-    owner: 'root'
-    group: 'root'
+    owner: root
+    group: root
     mode: 0755
   with_items:
     - "{{ keepalived_config_path }}"
@@ -20,18 +20,16 @@
 
 - name: download keepalived source file
   get_url:
-    url: '{{ keepalived_src_url }}'
+    url: >-
+      https://www.keepalived.org/software/keepalived-{{
+      keepalived_version }}.tar.gz
     dest: /usr/local/src
-    checksum: 'md5:{{ keepalived_src_checksum }}'
+    checksum: md5:{{ keepalived_checksum }}
   register: download_result
-
-- set_fact:
-    source_filename: >-
-      {{ keepalived_src_url|urlsplit('path')|basename }}
 
 - name: uncompress keepalived source file
   unarchive:
-    src: /usr/local/src/{{ source_filename }}
+    src: /usr/local/src/keepalived-{{ keepalived_version }}.tar.gz
     dest: /usr/local/src
     remote_src: yes
   when: download_result is changed
@@ -42,8 +40,7 @@
     ./configure --prefix=/usr/local
     make && make install
   args:
-    chdir: /usr/local/src/{{ ((source_filename|splitext)[0]|splitext)[0] }}
-    #creates: /usr/local/sbin/keepalived
+    chdir: /usr/local/src/keepalived-{{ keepalived_version }}
   register: build_result
   when: uncompress_result is changed
 

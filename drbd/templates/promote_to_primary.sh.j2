@@ -1,18 +1,35 @@
 #!/bin/bash
 
-if [ "$(/sbin/drbdadm role all)" == "Primary" ]; then
-    echo "Already in the primary role."
+role=$(/sbin/drbdadm role all)
+if [ "$role" == "Primary" ]; then
+    echo "Already in the primary role" >> {{ drdb_log_path }}/promote.log
     exit 0
 fi
 
 # Before promote script
-if [ -f "{{drdb_script_path}}/pre_promote.sh" ]; then
-    source "{{drdb_script_path}}/pre_promote.sh"
+if [ -f "{{ drdb_script_path }}/pre_promote.sh" ]; then
+    echo "executing before promote script" >> {{ drdb_log_path }}/promote.log
+    source "{{ drdb_script_path }}/pre_promote.sh" \
+    >> {{ drdb_log_path }}/promote.log
 fi
 
+# Promote to primary
+echo "promoting to primary" >> {{ drdb_log_path }}/promote.log
 /sbin/drbdadm primary --force all
 
-# Post promote script
-if [ -f "{{drdb_script_path}}/post_promote.sh" ]; then
-    source "{{drdb_script_path}}/post_promote.sh"
+role=$(/sbin/drbdadm role all)
+if [ "$role" == "Primary" ]; then
+    if [ -f "{{ drdb_script_path }}/post_promote.sh" ]; then
+        echo "executing after promote script" \
+        >> {{ drdb_log_path }}/promote.log
+        source "{{ drdb_script_path }}/post_promote.sh" \
+        >> {{ drdb_log_path }}/promote.log
+    fi
+else
+    if [ -f "{{ drdb_script_path }}/failed_promote.sh" ]; then
+        echo "executing failed promote script" \
+        >> {{ drdb_log_path }}/promote.log
+        source "{{ drdb_script_path }}/failed_promote.sh" \
+        >> {{ drdb_log_path }}/promote.log
+    fi
 fi

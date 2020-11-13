@@ -1,0 +1,262 @@
+---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: email@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name: 
+              - grafana.example.com
+            valid_days: 7
+
+- name: sync clock
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: chrony
+
+- name: setup drbd for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  vars:
+    keepalived_vip: 192.168.3.100
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: grafana_servers
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: grafana1.cluster.local
+                node-id: 0
+                address: 192.168.3.208:7788
+              - name: grafana2.cluster.local
+                node-id: 1
+                address: 192.168.3.209:7788
+            connection-mesh:
+              hosts: grafana1.cluster.local grafana2.cluster.local
+  post_tasks:
+    - name: prepare resource device
+      include_role:
+        name: drbd
+        tasks_from: prep_resource_device
+      vars:
+        mountpoint_path: /var/lib/grafana
+        mountpoint_owner: grafana
+        mountpoint_group: grafana
+        resource_device: /dev/drbd1
+        resource_device_filesystem: xfs
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "Skipping demote. keepalived VIP is attached."
+              exit 1
+          fi
+
+          /sbin/pidof grafana-server > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "stopping grafana server"
+              /bin/systemctl stop grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/pre_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          /sbin/pidof grafana-server > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "starting grafana server"
+              /bin/systemctl start grafana-server
+          fi
+        dest: /etc/drbd.d/scripts/post_demote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd before promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "Skipping promote. keepalived VIP is not attached."
+              exit 1
+          fi
+        dest: /etc/drbd.d/scripts/pre_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after successful promote script
+      copy:
+        content: |
+          /bin/mount | grep -w drbd1
+          if [ $? -eq 0 ]; then
+              echo "grafana volume already mounted"
+          else
+              echo "mounting grafana volume"
+              /bin/mount /dev/drbd1 /var/lib/grafana
+          fi
+
+          echo "restarting grafana server"
+          /bin/systemctl restart grafana-server
+        dest: /etc/drbd.d/scripts/post_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after failed promote script
+      copy:
+        content: |
+          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop grafana-server
+          fi
+
+          while true
+          do
+              ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+              if [ $? -ne 0 ]; then
+                  /bin/systemctl start grafana-server
+                  break
+              fi
+          done
+        dest: /etc/drbd.d/scripts/failed_promote.sh
+        owner: root
+        group: root
+        mode: 0744
+
+- name: setup grafana cluster
+  hosts: grafana_servers
+  become: yes
+  pre_tasks:
+    - name: copy letsencrypt certificates to grafana servers
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ grafana_certs_path }}"
+        cert_owner: "{{ grafana_user }}"
+        cert_group: "{{ grafana_group }}"
+        domain_name: example.com
+      register: copy_letsencrypt_certs
+  roles:
+    - name: grafana
+      vars:
+        grafana_configs:
+          server:
+            protocol: https
+            cert_file: "{{ grafana_certs_path }}/example.com-fullchain.crt"
+            cert_key: "{{ grafana_certs_path }}/example.com.pem"
+          security:
+            admin_user: grafana_admin
+            admin_password: mypassword
+  post_tasks:
+    - name: restart grafana
+      service:
+        name: grafana-server
+        state: restarted
+      when: copy_letsencrypt_certs is changed
+
+- name: setup keepalived for grafana cluster
+  hosts: grafana_servers
+  become: yes
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_grafana
+              script: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: GRAFANA_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.grafana_servers|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.grafana_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.grafana_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_grafana
+              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
+              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+  post_tasks:
+    - name: create grafana check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -k -o /dev/null -s -w "%{http_code}\n" \
+          https://localhost:3000/api/health)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+        owner: root
+        group: root
+        mode: 0744
+      notify: reload keepalived

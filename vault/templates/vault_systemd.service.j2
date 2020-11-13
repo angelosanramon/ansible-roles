@@ -1,12 +1,6 @@
-{% set new_options = [] %}
-{% set options = vault_server_cmdline_options | reject('search','config') %}
-{% for option in options %}
-{% if option[0] == '-' %}
-{% if new_options.append(option) %}{% endif %}
-{% else %}
-{% if new_options.append(option) %}{% endif %}
-{% endif %}
-{% endfor %}
+{%- set options = vault_server_cmdline_options|
+    reject('search','-config')|list
+-%}
 [Unit]
 Description="HashiCorp Vault - A tool for managing secrets"
 Documentation=https://www.vaultproject.io/docs/
@@ -28,8 +22,10 @@ AmbientCapabilities=CAP_IPC_LOCK
 Capabilities=CAP_IPC_LOCK+ep
 CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK
 NoNewPrivileges=yes
-ExecStart={{ vault_bin_path }}/vault server -config={{ vault_config_path }}/{{ vault_config_file }} \
-    {{ new_options | join(' \\\n    ') }}
+ExecStart={{ vault_bin_path }}/vault server \
+    -config={{ vault_config_path }}/{{ vault_config_file }}
+    {{- ' \\\n    ' if options|length > 0 else '' -}}
+    {{- options|join(' \\\n    ') + '\n' -}}
 ExecReload=/bin/kill --signal HUP $MAINPID
 KillMode=process
 KillSignal=SIGINT
