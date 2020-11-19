@@ -1,0 +1,86 @@
+- name: install java
+  package:
+    name: java
+    state: present
+
+- name: create jenkins user group
+  group:
+    name: "{{ jenkins_group }}"
+    state: present
+
+- name: create jenkins user
+  user:
+    name: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    shell: /sbin/nologin
+    create_home: no
+    home: "{{ jenkins_home_path }}"
+    state: present
+
+- name: create jenkins directories
+  file:
+    path: "{{ item }}"
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ jenkins_war_path }}"
+    - "{{ jenkins_home_path }}"
+    - "{{ jenkins_cache_path }}"
+    - "{{ jenkins_plugins_path }}"
+    - "{{ jenkins_casc_path }}"
+    - "{{ jenkins_log_path }}"
+    - "{{ jenkins_pid_path }}"
+    - "{{ jenkins_tls_path }}"
+
+- set_fact:
+    jenkins_base_src_url: >-
+      {{- "https://ftp-nyc.osuosl.org/pub/jenkins/war/" + 
+      jenkins_version|string -}}
+
+- name: download checksum file
+  get_url:
+    url: "{{ jenkins_base_src_url }}/jenkins.war.sha256"
+    dest: "{{ jenkins_war_path }}"
+
+- name: get checksum
+  slurp:
+    src: "{{ jenkins_war_path }}/jenkins.war.sha256"
+  register: checksum
+
+- name: download jenkins war file
+  get_url:
+    url: "{{ jenkins_base_src_url }}/jenkins.war"
+    dest: "{{ jenkins_war_path }}"
+    checksum: "sha256:{{ (checksum.content|b64decode).split()[0] }}"
+  notify: restart jenkins
+
+- name: create jenkins systemd file
+  template:
+    src: jenkins_systemd.service.j2
+    dest: /etc/systemd/system/jenkins.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart jenkins
+
+- name: copy jenkins configuration as code configurations
+  template:
+    src: "{{ item }}"
+    dest: "{{ jenkins_casc_path }}/"
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    mode: 0644
+  with_fileglob:
+    - "templates/jcasc/*.yml"
+  notify:
+    - restart jenkins
+
+- name: start jenkins
+  service:
+    name: jenkins
+    enabled: yes
+    state: started

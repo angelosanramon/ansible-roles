@@ -25,8 +25,8 @@ prometheus2.cluster.local      ansible_host=192.168.2.14
 
 [jenkins_masters]
 jenkins-master1.cluster.local  ansible_host=192.168.1.15
-jenkins-master1.cluster.local  ansible_host=192.168.2.15
+jenkins-master2.cluster.local  ansible_host=192.168.2.15
 
 [jenkins_slaves]
 jenkins-slave1.cluster.local   ansible_host=192.168.1.16
-jenkins-slave1.cluster.local   ansible_host=192.168.2.16
+jenkins-slave2.cluster.local   ansible_host=192.168.2.16

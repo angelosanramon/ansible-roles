@@ -47,18 +47,30 @@
     - name: create drbd before demote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -eq 0 ]; then
               echo "Skipping demote. keepalived VIP is attached."
               exit 1
           fi
 
-          /sbin/pidof grafana-server > /dev/null
-          if [ $? -eq 0 ]; then
-              echo "stopping grafana server"
-              /bin/systemctl stop grafana-server
+          # stop grafana
+          /bin/systemctl stop grafana-server
+
+          # wait for grafana to stop
+          loop_max=10
+          loop_count=0
+          while [ -n "`/sbin/pidof grafana-server`" ] && 
+          [ $loop_count -lt $loop_max ]; do
+              echo "waiting for grafana-server to stop"
+              loop_count=$((loop_count + 1))
+              sleep 10
+          done
+
+          if [ $loop_count -ge $loop_max ]; then
+              echo "unable to stop grafana"
+              exit
           fi
-        dest: /etc/drbd.d/scripts/pre_demote.sh
+        dest: "{{ drdb_script_path }}/pre_demote.sh"
         owner: root
         group: root
         mode: 0744
@@ -66,12 +78,22 @@
     - name: create drbd after demote script
       copy:
         content: |
-          /sbin/pidof grafana-server > /dev/null
-          if [ $? -ne 0 ]; then
-              echo "starting grafana server"
-              /bin/systemctl start grafana-server
-          fi
-        dest: /etc/drbd.d/scripts/post_demote.sh
+          # start grafana
+          /bin/systemctl start grafana-server
+
+          # wait for grafana to start
+          loop_max=10
+          loop_count=0
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:3000/api/health)
+          while [ $stat_code -ne 200 ] && [ $loop_count -lt $loop_max ]; do
+              echo "waiting for grafana-server to start"
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:3000/api/health)
+              loop_count=$((loop_count + 1))
+              sleep 10
+          done
+        dest: "{{ drdb_script_path }}/post_demote.sh"
         owner: root
         group: root
         mode: 0744
@@ -79,12 +101,12 @@
     - name: create drbd before promote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -ne 0 ]; then
               echo "Skipping promote. keepalived VIP is not attached."
               exit 1
           fi
-        dest: /etc/drbd.d/scripts/pre_promote.sh
+        dest: "{{ drdb_script_path }}/pre_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -92,7 +114,7 @@
     - name: create drbd after successful promote script
       copy:
         content: |
-          /bin/mount | grep -w drbd1
+          /bin/mount | /bin/grep -w drbd1
           if [ $? -eq 0 ]; then
               echo "grafana volume already mounted"
           else
@@ -102,7 +124,20 @@
 
           echo "restarting grafana server"
           /bin/systemctl restart grafana-server
-        dest: /etc/drbd.d/scripts/post_promote.sh
+
+          # wait for grafana to start
+          loop_max=10
+          loop_count=0
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:3000/api/health)
+          while [ $stat_code -ne 200 ] && [ $loop_count -lt $loop_max ]; do
+              echo "waiting for grafana-server to start"
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:3000/api/health)
+              loop_count=$((loop_count + 1))
+              sleep 10
+          done
+        dest: "{{ drdb_script_path }}/post_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -110,20 +145,23 @@
     - name: create drbd after failed promote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -eq 0 ]; then
               /bin/systemctl stop grafana-server
           fi
 
           while true
           do
-              ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+              /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > \
+              /dev/null
               if [ $? -ne 0 ]; then
                   /bin/systemctl start grafana-server
                   break
               fi
+
+              sleep 5
           done
-        dest: /etc/drbd.d/scripts/failed_promote.sh
+        dest: "{{ drdb_script_path }}/failed_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -142,6 +180,30 @@
 - name: setup keepalived for grafana cluster
   hosts: grafana_servers
   become: yes
+  pre_tasks:
+    - name: create keepalived script directory
+      file:
+        path: "{{ keepalived_scripts_path }}"
+        state: directory
+
+    - name: create grafana check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:3000/api/health)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+        owner: root
+        group: root
+        mode: 0744
+      register: grafana_chk_script
   roles:
     - name: keepalived
       vars:
@@ -202,24 +264,44 @@
                 - "{{ keepalived_vip }}"
               track_script:
                 - chk_grafana
-              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
-              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+              notify: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
   post_tasks:
-    - name: create grafana check script
+    - name: reload keepalived
+      service:
+        name: keepalived
+        state: reloaded
+      when: grafana_chk_script is changed
+
+    - name: create cron job for demoting or promoting drbd resource
       copy:
-        content: |-
+        content: |
           #!/bin/bash
 
-          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
-          http://localhost:3000/api/health)
-
-          if [ $stat_code -eq 200 ]; then
-              exit 0
-          else
-              exit 1
+          if [ -n "`pidof -x $(basename $0) -o %PPID`" ]; then
+              echo "$(basename $0) is already running."
+              exit
           fi
-        dest: "{{ keepalived_config_path }}/scripts/chk_grafana.sh"
+
+          role=$(/sbin/drbdadm role all)
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ] && [ "$role" == "Secondary" ]; then
+              echo "Promoting to primary."
+              /etc/drbd.d/scripts/promote_to_primary.sh
+          fi
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ] && [ "$role" == "Primary" ]; then
+              echo "Demote to secondary."
+              /etc/drbd.d/scripts/demote_to_secondary.sh
+          fi
+        dest: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
         owner: root
         group: root
         mode: 0744
-      notify: reload keepalived
+
+    - name: create cron job to promote or demote
+      cron:
+        name: "promote or demote drbd"
+        minute: "*/1"
+        job: "{{ keepalived_scripts_path }}/promote_or_demote.sh"

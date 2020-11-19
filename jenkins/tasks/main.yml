@@ -1,0 +1,15 @@
+---
+- name: add jenkins servers to hosts file
+  include_tasks: hostsfile.yml
+
+- name: install jenkins
+  include_tasks: install_master.yml
+
+- name: install plugins
+  include_tasks: install_plugins.yml
+
+- name: install and enable firewalld
+  include_tasks: firewalld.yml
+
+- name: configure logrotate
+  include_tasks: logrotate.yml

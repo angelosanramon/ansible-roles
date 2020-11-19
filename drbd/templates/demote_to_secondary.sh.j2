@@ -1,23 +1,37 @@
 #!/bin/bash
 
+echo "starting demote." >> {{ drdb_log_path }}/demote.log
+
+if [ -n "`pidof -x promote_to_primary.sh`" ]; then
+    echo "promote is in progress. exiting." >> {{ drdb_log_path }}/demote.log
+    exit 1
+fi
+
+if [ -n "`pidof -x $(basename $0) -o %PPID`" ]; then
+    echo "demote is already in progress. exiting." >> \
+    {{ drdb_log_path }}/demote.log
+    exit 1
+fi
+
 cd ~
 
+# exit if already in secondary role
 role=$(/sbin/drbdadm role all)
 if [ "$role" == "Secondary" ]; then
     echo "Already in the secondary role" >> {{ drdb_log_path }}/demote.log
     exit 0
 fi
 
-# Before demote script
+# run before demote script
 if [ -f "{{ drdb_script_path }}/pre_demote.sh" ]; then
     echo "executing before demote script" >> {{ drdb_log_path }}/demote.log
-    source "{{ drdb_script_path }}/pre_demote.sh" \
-    >> {{ drdb_log_path }}/demote.log
+    source "{{ drdb_script_path }}/pre_demote.sh" >> \
+    {{ drdb_log_path }}/demote.log
 fi
 
 devices=({{ drbd_resources_conf|map(attribute='device')|join(' ') }})
 
-# Unmount devices first
+# unmount devices first
 echo "unmounting devices" >> {{ drdb_log_path }}/demote.log
 for device in "${devices[@]}"; do
     /bin/mount | grep -w $device  > /dev/null
@@ -29,7 +43,7 @@ for device in "${devices[@]}"; do
     fi
 done
 
-# Demote all devices to secondary
+# demote all devices to secondary
 echo "demoting to secondary" >> {{ drdb_log_path }}/demote.log
 /sbin/drbdadm secondary all
 
@@ -37,13 +51,15 @@ role=$(/sbin/drbdadm role all)
 if [ "$role" == "Secondary" ]; then
     if [ -f "{{ drdb_script_path }}/post_demote.sh" ]; then
         echo "executing after demote script" >> {{ drdb_log_path }}/demote.log
-        source "{{ drdb_script_path }}/post_demote.sh" \
-        >> {{ drdb_log_path }}/demote.log
+        source "{{ drdb_script_path }}/post_demote.sh" >> \
+        {{ drdb_log_path }}/demote.log
     fi
 else
     if [ -f "{{ drdb_script_path }}/failed_demote.sh" ]; then
         echo "executing failed demote script" >> {{ drdb_log_path }}/demote.log
-        source "{{ drdb_script_path }}/failed_demote.sh" \
-        >> {{ drdb_log_path }}/demote.log
+        source "{{ drdb_script_path }}/failed_demote.sh" >> \
+        {{ drdb_log_path }}/demote.log
     fi
 fi
+
+echo "end of demote." >> {{ drdb_log_path }}/demote.log

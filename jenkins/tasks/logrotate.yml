@@ -1,0 +1,7 @@
+- name: create jenkins logrotate config file
+  template:
+    src: jenkins_logrotate.j2
+    dest: /etc/logrotate.d/jenkins
+    owner: root
+    group: root
+    mode: 0644

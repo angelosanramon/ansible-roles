@@ -1,0 +1,85 @@
+{%- set options = [] -%}
+{%- for env in jenkins_agent_environment_variables -%}
+  {{- options.append('-e "' + env + '"') -}}
+{%- endfor -%}
+{%- for label in jenkins_agent_labels -%}
+  {{- options.append('-labels ' + label) -}}
+{%- endfor -%}
+{{- options.append('-deleteExistingClients') if 
+jenkins_agent_delete_existing_clients else '' -}}
+{{- options.append('-description ' + jenkins_agent_description) if
+jenkins_agent_description != "" else '' -}}
+{{- options.append('-disableClientsUniqueId') if
+jenkins_agent_disable_clients_unique_id else '' -}}
+{{- options.append('-disableSslVerification') if
+jenkins_agent_disable_ssl_verification else '' -}}
+{{- options.append('-disableWorkDir') if
+jenkins_agent_disablework_dir else '' -}}
+{{- options.append('-executors ' + jenkins_agent_executors|string) if
+jenkins_agent_executors > 1 else '' -}}
+{{- options.append('-failIfWorkDirIsMissing') if 
+jenkins_agent_fail_if_workdir_is_missing else '' -}}
+{{- options.append('-fsroot ' + jenkins_agent_fsroot) if
+jenkins_agent_fsroot != '.' and jenkins_agent_fsroot != "" else '' -}}
+{{- options.append('-internalDir ' + jenkins_agent_internal_dir) if
+jenkins_agent_internal_dir != "" else '' -}}
+{{- options.append('-jar-cache ' + jenkins_agent_jar_cache) if
+jenkins_agent_jar_cache != "" else '' -}}
+{{- options.append('-labelsFile ' + jenkins_agent_labels_file) if
+jenkins_agent_labels_file != "" else '' -}}
+{{- options.append('-master ' + jenkins_agent_master) if
+jenkins_agent_master != "" else '' -}}
+{{- options.append('-maxRetryInterval ' +
+jenkins_agent_max_retry_interval|string) if
+jenkins_agent_max_retry_interval != 60 else '' -}}
+{{- options.append('-mode ' + jenkins_agent_mode) if 
+jenkins_agent_mode != 'normal' else '' -}}
+{{- options.append('-name ' + jenkins_agent_name) if 
+jenkins_agent_name != "" else '' -}}
+{{- options.append('-noRetryAfterConnected') if 
+jenkins_agent_no_retry_after_connected else '' -}}
+{{- options.append('-password ' + jenkins_agent_password) if
+jenkins_agent_password != "" else '' -}}
+{{- options.append('-passwordEnvVariable ' + 
+jenkins_agent_password_env_variable) if jenkins_agent_password_env_variable !=
+"" else '' -}}
+{{- options.append('-passwordFile ' + jenkins_agent_password_file) if
+jenkins_agent_password_file != "" else '' -}}
+{{- options.append('-pidFile ' + jenkins_agent_pidFile) if
+jenkins_agent_pidFile != "" else '' -}}
+{{- options.append('-prometheusPort ' + jenkins_agent_prometheus_port|string) if
+jenkins_agent_prometheus_port != -1 else '' -}}
+{{- options.append('-retry ' + jenkins_agent_retry|string) if
+jenkins_agent_retry != -1 else '' -}}
+{{- options.append('-retryBackOffStrategy ' + 
+jenkins_agent_retry_back_off_strategy) if 
+jenkins_agent_retry_back_off_strategy|lower != 'none' else '' -}}
+{{- options.append('-retryInterval ' + jenkins_agent_retry_interval|string) if
+jenkins_agent_retry_interval != 10 else '' -}}
+{{- options.append('-sslFingerprints ' + jenkins_agent_ssl_fingerprints) if
+jenkins_agent_ssl_fingerprints != "" else '' -}}
+{{- options.append('-t ' + jenkins_agent_tool_location) if
+jenkins_agent_tool_location != "" else '' -}}
+{{- options.append('-tunnel ' + jenkins_agent_tunnel) if
+jenkins_agent_tunnel != "" else '' -}}
+{{- options.append('-username ' + jenkins_agent_username) if
+jenkins_agent_username != "" else '' -}}
+{{- options.append('-webSocket') if jenkins_agent_web_socket else '' -}}
+{{- options.append('-workDir ' + jenkins_agent_workdir) if
+jenkins_agent_workdir != "" else '' -}}
+[Unit]
+Description=Jenkins swarm client
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ jenkins_agent_user }}
+Group={{ jenkins_agent_group }}
+ExecStart=/bin/java \
+    -jar {{ jenkins_agent_jar_path }}/swarm-client-{{
+    jenkins_agent_version }}.jar
+    {{- ' \\\n    ' if options|length > 0 else '\n\n' -}}
+    {{- options|join(' \\\n    ') + '\n\n' -}}
+
+[Install]
+WantedBy=multi-user.target

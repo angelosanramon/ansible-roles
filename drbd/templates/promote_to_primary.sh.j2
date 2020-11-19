@@ -1,35 +1,76 @@
 #!/bin/bash
 
+echo "starting promote." >> {{ drdb_log_path }}/promote.log
+
+# exit if demote is running.
+if [ -n "`pidof -x demote_to_secondary.sh`" ]; then
+    echo "demote is in progress. exiting." >> {{ drdb_log_path }}/promote.log
+    exit 1
+fi
+
+if [ -n "`pidof -x $(basename $0) -o %PPID`" ]; then
+    echo "promote is already in progress. exiting." >> \
+    {{ drdb_log_path }}/promote.log
+    exit 1
+fi
+
+# exit if already in primary role
 role=$(/sbin/drbdadm role all)
 if [ "$role" == "Primary" ]; then
     echo "Already in the primary role" >> {{ drdb_log_path }}/promote.log
     exit 0
 fi
 
-# Before promote script
+# Wait a bit until peer release primary role
+/sbin/drbdadm status | tail -n +3 | grep Primary > /dev/null
+exit_code=$?
+loop_max=12
+loop_count=0
+while [ $loop_count -lt $loop_max ]
+do
+  if [ $exit_code -ne 0 ]; then
+      break
+  fi
+
+  sleep 10
+  loop_count=$((loop_count + 1))
+  /sbin/drbdadm status | tail -n +3 | grep Primary > /dev/null
+  exit_code=$?
+done
+
+# Exit promote if peer retain primary role
+if [ $loop_count -ge $loop_max ]; then
+  echo "Skipping promote. Primary already exist on peers."
+  exit 1
+fi
+
+# Run before promote script
 if [ -f "{{ drdb_script_path }}/pre_promote.sh" ]; then
     echo "executing before promote script" >> {{ drdb_log_path }}/promote.log
-    source "{{ drdb_script_path }}/pre_promote.sh" \
-    >> {{ drdb_log_path }}/promote.log
+    source "{{ drdb_script_path }}/pre_promote.sh" >> \
+    {{ drdb_log_path }}/promote.log
 fi
 
 # Promote to primary
 echo "promoting to primary" >> {{ drdb_log_path }}/promote.log
 /sbin/drbdadm primary --force all
 
+# Run after promote script
 role=$(/sbin/drbdadm role all)
 if [ "$role" == "Primary" ]; then
     if [ -f "{{ drdb_script_path }}/post_promote.sh" ]; then
-        echo "executing after promote script" \
-        >> {{ drdb_log_path }}/promote.log
-        source "{{ drdb_script_path }}/post_promote.sh" \
-        >> {{ drdb_log_path }}/promote.log
+        echo "executing after promote script" >> \
+        {{ drdb_log_path }}/promote.log
+        source "{{ drdb_script_path }}/post_promote.sh" >> \
+        {{ drdb_log_path }}/promote.log
     fi
 else
     if [ -f "{{ drdb_script_path }}/failed_promote.sh" ]; then
-        echo "executing failed promote script" \
-        >> {{ drdb_log_path }}/promote.log
-        source "{{ drdb_script_path }}/failed_promote.sh" \
-        >> {{ drdb_log_path }}/promote.log
+        echo "executing failed promote script" >> \
+        {{ drdb_log_path }}/promote.log
+        source "{{ drdb_script_path }}/failed_promote.sh" >> \
+        {{ drdb_log_path }}/promote.log
     fi
 fi
+
+echo "end of promote." >> {{ drdb_log_path }}/promote.log

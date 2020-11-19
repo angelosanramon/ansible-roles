@@ -1,0 +1,82 @@
+{%- set java_options = jenkins_java_options|
+    reject('search', '-DJENKINS_HOME')|
+    reject('search', '-Djava.awt.headless')|
+    reject('search', '-Dcasc.jenkins.config')|
+    list
+-%}
+{%- set cmdline_options = jenkins_cmdline_options|
+    reject('search', '--logfile')|
+    reject('search', '--webroot')|
+    reject('search', '--httpPort')|
+    reject('search', '--httpListenAddress')|
+    reject('search', '--httpsPort')|
+    reject('search', '--httpsListenAddress')|
+    reject('search', '--http2Port')|
+    reject('search', '--http2ListenAddress')|
+    reject('search', '--httpsKeyStore')|
+    reject('search', '--httpsKeyStorePassword')|
+    reject('search', '--httpsPrivateKey')|
+    reject('search', '--httpsCertificate')|
+    reject('search', '--pluginroot')|
+    reject('search', '--daemon')|
+    list
+-%}
+{{- cmdline_options.append('--httpsPort=' + jenkins_https_port|string) if
+    jenkins_https_port|default("", true) != "" else "" -}}
+{{- cmdline_options.append('--httpsListenAddress=' + 
+    jenkins_https_listen_address|string) if jenkins_https_listen_address|
+    default("", true) else "" -}}
+{{- cmdline_options.append('--http2Port=' + jenkins_http2_port|string) if
+    jenkins_http2_port|default("", true) else "" -}}
+{{- cmdline_options.append('--http2ListenAddress=' + 
+    jenkins_http2_listen_address|string) if jenkins_http2_listen_address|
+    default("", true) else "" -}}
+{{- cmdline_options.append('--httpsKeyStore=' + jenkins_https_keystore) if 
+    jenkins_https_keystore|default("", true) != "" else "" -}}
+{{- cmdline_options.append('--httpsKeyStorePassword=' + 
+    jenkins_https_keystore_password) if jenkins_https_keystore_password|
+    default("", true) != "" else "" -}}
+{{- cmdline_options.append('--httpsKeyStore=' + jenkins_https_keystore) if 
+    jenkins_https_keystore|default("", true) != "" else "" -}}
+{{- cmdline_options.append('--httpsCertificate=' + jenkins_https_certificate) if 
+    jenkins_https_certificate|default("", true) != "" else "" -}}
+{{- cmdline_options.append('--httpsPrivateKey=' + jenkins_https_private_key) if 
+    jenkins_https_private_key|default("", true) != "" else "" -}}
+[Unit]
+Description=Jenkins Automation Server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Environment="JENKINS_HOME={{ jenkins_home_path }}"
+{% for env_vars in jenkins_environment_variables %}
+Environment="{{ env_vars }}"
+{% endfor %}
+User={{ jenkins_user }}
+Group={{ jenkins_group }}
+PIDFile={{ jenkins_pid_path }}/{{ jenkins_pid_file }}
+ExecStart=/bin/java \
+    -DJENKINS_HOME={{ jenkins_home_path }} \
+    -Djava.awt.headless=true \
+    -Dcasc.jenkins.config={{ jenkins_casc_path }} \
+    {{- '\n' if java_options|length > 0 else '\n    ' -}}
+    {%- for option in java_options -%}
+      {{ option|indent(width=4,first=true) + ' \\\n    ' }}
+    {%- endfor -%}
+    -jar {{ jenkins_war_path }}/jenkins.war \
+    --logfile={{ jenkins_log_path }}/{{ jenkins_log_file }} \
+    --webroot={{ jenkins_cache_path }}/war \
+    --httpPort={{ jenkins_http_port|string }} \
+    --httpListenAddress={{ jenkins_http_listen_address|string }}
+    {{- ' \\' if cmdline_options|length > 0 else '\n' -}}
+    {%- for option in cmdline_options -%}
+      {{ '\n' + option|indent(width=4,first=true) }}{{ '\n' if loop.last else
+      ' \\' }}
+    {%- endfor -%}
+ExecStartPost=/bin/sh -c '/bin/echo $MAINPID > {{ jenkins_pid_path }}/{{
+    jenkins_pid_file }}'
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
+

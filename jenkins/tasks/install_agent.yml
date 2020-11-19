@@ -1,0 +1,93 @@
+- name: install required packages
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - java
+    - python3-lxml
+
+- name: create agent user group
+  group:
+    name: "{{ jenkins_agent_user }}"
+    state: present
+
+- name: create agent user
+  user:
+    name: "{{ jenkins_agent_user }}"
+    group: '{{ jenkins_agent_group }}'
+    shell: /sbin/nologin
+    state: present
+
+- name: create agent directories
+  file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+    state: directory
+  with_items:
+    - { path: "{{ jenkins_agent_jar_path }}",
+        owner: "{{ jenkins_agent_user }}",
+        group: "{{ jenkins_agent_group }}",
+        mode: "0755" }
+    - { path: "{{ jenkins_agent_cache_path }}",
+        owner: "{{ jenkins_agent_user }}",
+        group: "{{ jenkins_agent_group }}",
+        mode: "0755" }
+    - { path: "{{ jenkins_agent_home_path }}",
+        owner: "{{ jenkins_agent_user }}",
+        group: "{{ jenkins_agent_group }}",
+        mode: "0755" }
+    - { path: "{{ jenkins_agent_pid_path }}",
+        owner: "{{ jenkins_agent_user}}",
+        group: "{{ jenkins_agent_group }}",
+        mode: "0755" }
+
+- block:
+    - name: download agent release metadata
+      get_url:
+        url: >-
+          {{- "https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/" +
+          "swarm-client/maven-metadata.xml" -}}
+        dest: /tmp
+
+    - name: get latest version from metadata
+      xml:
+        path: /tmp/maven-metadata.xml
+        xpath: /metadata/versioning/latest
+        content: text
+      register: version
+
+    - set_fact:
+        jenkins_agent_version: >-
+          {{- version.matches[0].latest -}}
+  when: jenkins_agent_version == 'latest'
+
+- set_fact:
+    agent_src_url: >-
+      {{- "https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/" +
+      "swarm-client/" + jenkins_agent_version + "/swarm-client-" + 
+      jenkins_agent_version +'.jar' -}}
+
+- name: download agent
+  get_url:
+    url: "{{ agent_src_url }}"
+    dest: "{{ jenkins_agent_jar_path }}"
+  notify: restart jenkins-agent
+
+- name: create agent systemd file
+  template:
+    src: agent_systemd.service.j2
+    dest: /etc/systemd/system/jenkins-agent.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart jenkins-agent
+
+- name: start jenkins-agent
+  service:
+    name: jenkins-agent
+    enabled: yes
+    state: started

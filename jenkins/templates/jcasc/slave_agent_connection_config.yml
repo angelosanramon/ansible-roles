@@ -1,0 +1,4 @@
+jenkins:
+  agentProtocols:
+    - "JNLP4-connect"
+  slaveAgentPort: {{ jenkins_slave_agent_port }}

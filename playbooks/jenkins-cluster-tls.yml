@@ -1,0 +1,514 @@
+---
+- name: generate certificates
+  hosts: localhost
+  become: yes
+  roles:
+    - name: letsencrypt
+      vars:
+        letsencrypt_acme_email: email@example.com
+        letsencrypt_aws_access_key: my_aws_access_key
+        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_route53_zone: example.com
+        letsencrypt_certificates:
+          - common_name: example.com
+            subject_alt_name:
+              - jenkins.example.com
+            valid_days: 7
+
+- name: sync clock
+  hosts:
+    - jenkins_masters
+    - jenkins_slaves
+  become: yes
+  roles:
+    - name: chrony
+
+- name: install drbd for jenkins cluster
+  hosts: jenkins_masters
+  become: yes
+  vars:
+    keepalived_vip: 192.168.3.100
+  roles:
+    - name: drbd
+      vars:
+        drbd_servers_group_name: jenkins_masters
+        drbd_resources_conf:
+          - name: drbd1
+            meta-disk: internal
+            device: /dev/drbd1
+            disk: /dev/sdb1
+            options:
+              auto-promote: 'no'
+            net:
+              verify-alg: sha256
+            'on':
+              - name: jenkins-master1.cluster.local
+                node-id: 0
+                address: 192.168.3.216:7788
+              - name: jenkins-master2.cluster.local
+                node-id: 1
+                address: 192.168.3.217:7788
+            connection-mesh:
+              hosts: jenkins-master1.cluster.local jenkins-master2.cluster.local
+  post_tasks:
+    - name: prepare resource device
+      include_role:
+        name: drbd
+        tasks_from: prep_resource_device
+      vars:
+        mountpoint_path: /var/lib/jenkins
+        mountpoint_owner: jenkins
+        mountpoint_group: jenkins
+        resource_device: /dev/drbd1
+        resource_device_filesystem: xfs
+
+    - name: create drbd before demote script
+      copy:
+        content: |
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              echo "Skipping demote. keepalived VIP is attached."
+              exit 1
+          fi
+
+          # stop jenkins before demoting to secondary so that device can be
+          # unmounted
+          proc=$(/bin/ps -aux | /bin/grep -w java | /bin/grep -w '\-jar' |
+          /bin/grep -w 'jenkins.war' | awk '{print $2}')
+          if [ -n "$proc" ]; then
+              /bin/systemctl stop jenkins
+          fi
+
+          # wait for jenkins to stop
+          max_loop=12
+          loop_count=0
+          while [ -n "$proc" ] && [ $loop_count -lt $max_loop ]; do
+              echo "waiting for jenkins to terminate"
+              sleep 5
+              proc=$(/bin/ps -aux | /bin/grep -w java | /bin/grep -w '\-jar' | 
+              /bin/grep -w 'jenkins.war' | awk '{print $2}')
+              loop_count=$((loop_count + 1))
+          done
+        dest: "{{ drdb_script_path }}/pre_demote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after demote script
+      copy:
+        content: |
+          # restart jenkins
+          /bin/systemctl restart jenkins
+
+          # wait for jenkins to fully start up          
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:8080/login)
+          max_loop=12
+          loop_count=0
+          while [ $stat_code -ne 200 ] && [ $loop_count -lt $max_loop ]; do
+              echo "waiting for jenkins to be ready."
+              sleep 5
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:8080/login)
+              loop_count=$((loop_count + 1))
+          done
+        dest: "{{ drdb_script_path }}/post_demote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd before promote script
+      copy:
+        content: |
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ]; then
+              echo "Skipping promote. keepalived VIP is not attached."
+              exit 1
+          fi
+        dest: "{{ drdb_script_path }}/pre_promote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after successful promote script
+      copy:
+        content: |
+          /bin/mount | /bin/grep -w drbd1
+          if [ $? -eq 0 ]; then
+              echo "jenkins volume already mounted"
+          else
+              echo "mounting jenkins volume"
+              /bin/mount /dev/drbd1 /var/lib/jenkins
+          fi
+
+          # restart jenkins
+          /bin/systemctl restart jenkins
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:8080/login)
+
+          # wait for jenkins to fully start up
+          max_loop=12
+          loop_count=0
+          while [ $stat_code -ne 200 ] && [ $loop_count -lt $max_loop ]; do
+              echo "waiting for jenkins to be ready."
+              sleep 5
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
+              http://localhost:8080/login)
+              loop_count=$((loop_count + 1))
+          done
+        dest: "{{ drdb_script_path }}/post_promote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create drbd after failed promote script
+      copy:
+        content: |
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ]; then
+              /bin/systemctl stop jenkins
+          fi
+
+          while true
+          do
+              /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+              if [ $? -ne 0 ]; then
+                  /bin/systemctl start jenkins
+                  break
+              fi
+
+              sleep 5
+          done
+        dest: "{{ drdb_script_path }}/failed_promote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+- name: setup jenkins masters
+  hosts: jenkins_masters
+  become: yes
+  pre_tasks:
+    - name: copy letsencrypt certificates to grafana servers
+      include_role:
+        name: letsencrypt
+        tasks_from: fetch_certificates.yml
+      vars:
+        cert_path: "{{ jenkins_tls_path }}"
+        cert_owner: "{{ jenkins_user }}"
+        cert_group: "{{ jenkins_group }}"
+        domain_name: example.com
+      register: copy_letsencrypt_certs
+  roles:
+    - name: jenkins
+      vars:
+        keepalived_vip: 192.168.3.100
+        jenkins_http_port: -1
+        jenkins_https_port: 8443
+        jenkins_https_listen_address: 0.0.0.0
+        jenkins_https_keystore: "{{ jenkins_tls_path }}/keystore.jks"
+        jenkins_https_keystore_password: mypassword
+        jenkins_plugins:
+          - { name: cloudbees-folder, version: latest }
+          - { name: ssh-credentials, version: latest }
+          - { name: structs, version: latest }
+          - { name: workflow-step-api, version: latest }
+          - { name: plain-credentials, version: latest }
+          - { name: credentials, version: latest }
+          - { name: credentials-binding }
+          - { name: workflow-api, version: latest }
+          - { name: scm-api, version: latest }
+          - { name: timestamper, version: latest }
+          - { name: resource-disposer, version: latest }
+          - { name: workflow-durable-task-step, version: latest }
+          - { name: workflow-support, version: latest }
+          - { name: durable-task, version: latest }
+          - { name: bootstrap4-api, version: latest }
+          - { name: plugin-util-api, version: latest }
+          - { name: display-url-api, version: latest }
+          - { name: echarts-api, version: latest }
+          - { name: checks-api, version: latest }
+          - { name: jquery3-api, version: latest }
+          - { name: popper-api, version: latest }
+          - { name: font-awesome-api, version: latest }
+          - { name: junit, version: latest }
+          - { name: matrix-project, version: latest }
+          - { name: ws-cleanup, version: latest }
+          - { name: okhttp-api, version: latest }
+          - { name: display-url-api, version: latest }
+          - { name: git-client, version: latest }
+          - { name: mailer, version: latest }
+          - { name: workflow-scm-step, version: latest }
+          - { name: workflow-job, version: latest }
+          - { name: workflow-cps, version: latest }
+          - { name: git, version: latest }
+          - { name: github-api, version: latest }
+          - { name: github, version: latest }
+          - { name: jackson2-api, version: latest }
+          - { name: workflow-support, version: latest }
+          - { name: github-branch-source, version: latest }
+          - { name: apache-httpcomponents-client-4-api, version: latest }
+          - { name: jsch, version: latest }
+          - { name: ace-editor, version: latest }
+          - { name: token-macro, version: latest }
+          - { name: bouncycastle-api, version: latest }
+          - { name: ssh, version: latest }
+          - { name: matrix-auth, version: latest }
+          - { name: email-ext, version: latest }
+          - { name: workflow-aggregator, version: latest }
+          - { name: pipeline-milestone-step, version: latest }
+          - { name: workflow-basic-steps, version: latest }
+          - { name: pipeline-stage-step, version: latest }
+          - { name: pipeline-model-definition, version: latest }
+          - { name: lockable-resources, version: latest }
+          - { name: pipeline-build-step, version: latest }
+          - { name: pipeline-input-step, version: latest }
+          - { name: workflow-multibranch, version: latest }
+          - { name: workflow-cps-global-lib, version: latest }
+          - { name: pipeline-stage-view, version: latest }
+          - { name: pipeline-rest-api, version: latest }
+          - { name: handlebars, version: latest }
+          - { name: jquery-detached, version: latest }
+          - { name: momentjs, version: latest }
+          - { name: git-server, version: latest }
+          - { name: branch-api, version: latest }
+          - { name: pipeline-graph-analysis, version: latest }
+          - { name: pipeline-stage-tags-metadata, version: latest }
+          - { name: pipeline-model-api, version: latest }
+          - { name: pipeline-model-extensions, version: latest }
+          - { name: blueocean, version: latest }
+          - { name: blueocean-autofavorite, version: latest }
+          - { name: blueocean-web, version: latest }
+          - { name: blueocean-pipeline-editor, version: latest }
+          - { name: blueocean-config, version: latest }
+          - { name: blueocean-github-pipeline, version: latest }
+          - { name: blueocean-git-pipeline, version: latest }
+          - { name: blueocean-dashboard, version: latest }
+          - { name: blueocean-pipeline-api-impl, version: latest }
+          - { name: blueocean-display-url, version: latest }
+          - { name: blueocean-jwt, version: latest }
+          - { name: blueocean-rest-impl, version: latest }
+          - { name: blueocean-commons, version: latest }
+          - { name: blueocean-bitbucket-pipeline, version: latest }
+          - { name: jenkins-design-language, version: latest }
+          - { name: blueocean-rest, version: latest }
+          - { name: blueocean-i18n, version: latest }
+          - { name: blueocean-personalization, version: latest }
+          - { name: blueocean-events, version: latest }
+          - { name: blueocean-jira, version: latest }
+          - { name: blueocean-core-js, version: latest }
+          - { name: jira, version: latest }
+          - { name: blueocean-pipeline-scm-api, version: latest }
+          - { name: variant, version: latest }
+          - { name: favorite, version: latest }
+          - { name: pubsub-light, version: latest }
+          - { name: htmlpublisher, version: latest }
+          - { name: sse-gateway, version: latest }
+          - { name: docker-workflow, version: latest }
+          - { name: cloudbees-bitbucket-branch-source, version: latest }
+          - { name: docker-commons, version: latest }
+          - { name: mercurial, version: latest }
+          - { name: authentication-tokens, version: latest }
+          - { name: handy-uri-templates-2-api, version: latest }
+          - { name: nodelabelparameter, version: latest }
+          - { name: jquery, version: latest }
+  post_tasks:
+    - name: set jenkins configurations via JCasC
+      copy:
+        content: |-
+          jenkins:
+            securityRealm:
+              local:
+                allowsSignup: false
+                users:
+                  - id: admin
+                    password: mypassword
+            remotingSecurity:
+              enabled: true
+          unclassified:
+            location:
+              url: http://{{ keepalived_vip }}:{{ jenkins_http_port }}/
+              adminAddress: email@example.com
+        dest: "{{ jenkins_casc_path }}/admin_user_config.yml"
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_group }}"
+        mode: 0600
+      notify: restart jenkins
+
+    - name: load certificate to variable
+      slurp:
+        src: "{{ jenkins_tls_path }}/example.com-fullchain.crt"
+      register: cert
+
+    - name: load key to variable
+      slurp:
+        src: "{{ jenkins_tls_path }}/example.com.key"
+      register: key
+
+    - name: convert certificates to jks format
+      java_keystore:
+        name: jenkins
+        certificate: "{{ cert.content|b64decode }}"
+        private_key: "{{ key.content|b64decode }}"
+        password: mypassword
+        dest: "{{ jenkins_tls_path }}/keystore.jks"
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_group }}"
+      notify: restart jenkins
+
+- name: setup keepalived for jenkins masters
+  hosts: jenkins_masters
+  become: yes
+  pre_tasks:
+    - name: create keepalived script directory
+      file:
+        path: "{{ keepalived_scripts_path }}"
+        state: directory
+
+    - name: create jenkins check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -k -o /dev/null -s -w "%{http_code}\n" \
+          https://localhost:8443/login)
+
+          if [ $stat_code -eq 200 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_scripts_path }}/chk_jenkins.sh"
+        owner: root
+        group: root
+        mode: 0744
+      register: jenkins_chk_script
+  roles:
+    - name: keepalived
+      vars:
+        keepalived_vip: 192.168.3.100
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+          vrrp_script:
+            - name: chk_jenkins
+              script: "{{ keepalived_scripts_path }}/chk_jenkins.sh"
+              interval: 30
+              weight: 2
+          vrrp_instance:
+            - name: JENKINS_HA
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.jenkins_masters|
+                first == inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.jenkins_masters|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.jenkins_masters if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_jenkins
+              notify: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
+  post_tasks:
+    - name: reload keepalived
+      service:
+        name: keepalived
+        state: reloaded
+      when: jenkins_chk_script is changed
+
+    - name: create cron job for demoting or promoting drbd resource
+      copy:
+        content: |
+          #!/bin/bash
+
+          if [ -n "`pidof -x $(basename $0) -o %PPID`" ]; then
+              echo "$(basename $0) is already running."
+              exit
+          fi
+
+          role=$(/sbin/drbdadm role all)
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ] && [ "$role" == "Secondary" ]; then
+              echo "Promoting to primary."
+              /etc/drbd.d/scripts/promote_to_primary.sh
+          fi
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ] && [ "$role" == "Primary" ]; then
+              echo "Demote to secondary."
+              /etc/drbd.d/scripts/demote_to_secondary.sh
+          fi
+        dest: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
+        owner: root
+        group: root
+        mode: 0744
+
+    - name: create cron job to promote or demote
+      cron:
+        name: "promote or demote drbd"
+        minute: "*/1"
+        job: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
+
+- name: setup jenkins slaves
+  hosts: jenkins_slaves
+  become: yes
+  tasks:
+    - name: add every hosts to /etc/hosts file
+      lineinfile:
+        path: /etc/hosts
+        line: 192.168.3.100 jenkins.example.com
+        create: yes
+
+    - name: get jenkins master certificate fingerprint
+      shell: >-
+        openssl s_client -showcerts -connect jenkins.example.com:8443 
+        2> /dev/null | openssl x509 -noout -sha256 -fingerprint | 
+        awk -F'=' '{print $NF}'
+      register: fingerprint
+      changed_when: false
+
+    - name: install jenkins clients
+      include_role:
+        name: jenkins
+        tasks_from: install_agent
+      vars:
+        jenkins_agent_executors: 2
+        jenkins_agent_labels:
+          - test-slaves
+        jenkins_agent_master: https://jenkins.example.com:8443
+        jenkins_agent_username: admin
+        jenkins_agent_password: mypassword
+        jenkins_agent_ssl_fingerprints: "{{ fingerprint.stdout }}"

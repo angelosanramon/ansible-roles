@@ -1,0 +1,42 @@
+jenkins_agent_version: latest
+jenkins_agent_user: jenkins
+jenkins_agent_group: jenkins
+jenkins_agent_jar_path: /usr/lib/swarm-client
+jenkins_agent_cache_path: /var/cache/swarm-client
+jenkins_agent_home_path: /var/lib/swarm-client
+jenkins_agent_pid_path: /run/swarm-client
+
+jenkins_agent_delete_existing_clients: false
+jenkins_agent_description: ""
+jenkins_agent_disable_clients_unique_id: false
+jenkins_agent_disable_ssl_verification: false
+jenkins_agent_disablework_dir: false
+jenkins_agent_environment_variables: []
+jenkins_agent_executors: 1
+jenkins_agent_fail_if_workdir_is_missing: false
+jenkins_agent_fsroot: "{{ jenkins_agent_home_path }}"
+jenkins_agent_internal_dir: ""
+jenkins_agent_jar_cache: "{{ jenkins_agent_jar_path }}"
+jenkins_agent_labels: []
+jenkins_agent_labels_file: ""
+jenkins_agent_master: ""
+jenkins_agent_max_retry_interval: 60
+jenkins_agent_mode: normal
+jenkins_agent_name: "{{ inventory_hostname }}"
+jenkins_agent_no_retry_after_connected: false
+jenkins_agent_password: ""
+jenkins_agent_password_env_variable: ""
+jenkins_agent_password_file: ""
+jenkins_agent_pidFile: "{{ jenkins_agent_pid_path }}/swarm-client.pid"
+jenkins_agent_prometheus_port: -1
+jenkins_agent_retry: -1
+jenkins_agent_retry_back_off_strategy: none
+jenkins_agent_retry_interval: 10
+jenkins_agent_ssl_fingerprints: ""
+jenkins_agent_tool_location: ""
+jenkins_agent_tunnel: ""
+jenkins_agent_username: ""
+jenkins_agent_web_socket: false
+jenkins_agent_workdir: "{{ jenkins_agent_cache_path }}"
+
+jenkins_slaves_group_name: jenkins_slaves

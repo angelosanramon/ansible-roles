@@ -1,0 +1,28 @@
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: restart jenkins
+  service:
+    name: jenkins
+    state: restarted
+  listen: restart jenkins
+
+- name: restart jenkins-agent
+  service:
+    name: jenkins-agent
+    state: restarted
+  listen: restart jenkins-agent
+
+- name: restart firewalld
+  service:
+    name: firewalld
+    state: restarted
+  listen: restart firewalld
+
+- name: reload firewalld
+  service:
+    name: firewalld
+    state: reloaded
+  listen: reload firewalld

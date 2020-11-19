@@ -1,0 +1,50 @@
+- set_fact:
+    required_plugins:
+      - { name: snakeyaml-api, version: latest }
+      - { name: configuration-as-code, version: latest }
+      - { name: configuration-as-code-groovy, version: latest }
+      - { name: swarm, version: latest }
+      - { name: script-security, version: latest }
+      - { name: command-launcher, version: latest }
+      - { name: jdk-tool, version: latest }
+      - { name: trilead-api, version: latest }
+
+- set_fact:
+    selected_plugins: "{{ jenkins_plugins + required_plugins }}"
+
+- name: install plugins
+  get_url:
+    url: >-
+      https://ftp-nyc.osuosl.org/pub/jenkins/plugins/{{ 
+      item.name }}/{{ item.version|default('latest', true)|string }}/{{
+      item.name }}.hpi
+    dest: "{{ jenkins_plugins_path }}/{{ item.name + '.jpi' }}"
+  with_items: "{{ selected_plugins }}"
+  notify: restart jenkins
+
+- name: get all installed plugins
+  find:
+    paths: "{{ jenkins_plugins_path }}"
+    patterns: "*.jpi"
+  register: installed_plugins
+
+- set_fact:
+    delete_plugins: >-
+      {%- set selected_plugins_names = selected_plugins|
+        map(attribute='name')|list -%}
+      {%- set defunct_plugins = [] -%}
+      {%- for file in installed_plugins.files -%}
+        {%- set plugin_name = file.path.split('/')[-1]|replace('.jpi','') -%}
+        {%- if plugin_name not in  selected_plugins_names-%}
+          {{- defunct_plugins.append(plugin_name) -}}
+          {{- defunct_plugins.append(plugin_name + '.jpi') -}}
+        {%- endif -%}
+      {%- endfor -%}
+      {{- defunct_plugins -}}
+
+- name: delete defunct plugins
+  file:
+    path: "{{ jenkins_plugins_path }}/{{ item }}"
+    state: absent
+  with_items: "{{ delete_plugins }}"
+  notify: restart jenkins

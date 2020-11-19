@@ -47,7 +47,7 @@
     - name: create drbd before demote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -eq 0 ]; then
               echo "Skipping demote. keepalived VIP is attached."
               exit 1
@@ -58,7 +58,7 @@
               echo "stopping vault server"
               /bin/systemctl stop vault
           fi
-        dest: /etc/drbd.d/scripts/pre_demote.sh
+        dest: "{{ drdb_script_path }}/pre_demote.sh"
         owner: root
         group: root
         mode: 0744
@@ -72,7 +72,7 @@
               /bin/systemctl start vault
           fi
 
-          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
           http://localhost:8200/v1/sys/health)
 
           loop_max=10
@@ -87,7 +87,7 @@
 
               sleep 10
               loop_count=$((loop_count + 1))
-              stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
               http://localhost:8200/v1/sys/health)
           done
 
@@ -95,7 +95,7 @@
               echo "unsealing vault server"
               source /etc/vault/scripts/unseal.sh
           fi
-        dest: /etc/drbd.d/scripts/post_demote.sh
+        dest: "{{ drdb_script_path }}/post_demote.sh"
         owner: root
         group: root
         mode: 0744
@@ -103,12 +103,12 @@
     - name: create drbd before promote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -ne 0 ]; then
               echo "Skipping promote. keepalived VIP is not attached."
               exit 1
           fi
-        dest: /etc/drbd.d/scripts/pre_promote.sh
+        dest: "{{ drdb_script_path }}/pre_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -116,7 +116,7 @@
     - name: create drbd after successful promote script
       copy:
         content: |
-          /bin/mount | grep -w drbd1
+          /bin/mount | /bin/grep -w drbd1
           if [ $? -eq 0 ]; then
               echo "vault volume already mounted"
           else
@@ -127,7 +127,7 @@
           echo "restarting vault server"
           /bin/systemctl restart vault
 
-          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
           http://localhost:8200/v1/sys/health)
 
           loop_max=10
@@ -142,7 +142,7 @@
 
               sleep 10
               loop_count=$((loop_count + 1))
-              stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
               http://localhost:8200/v1/sys/health)
           done
 
@@ -150,7 +150,7 @@
               echo "unsealing vault server"
               source /etc/vault/scripts/unseal.sh
           fi
-        dest: /etc/drbd.d/scripts/post_promote.sh
+        dest: "{{ drdb_script_path }}/post_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -158,14 +158,15 @@
     - name: create drbd after failed promote script
       copy:
         content: |
-          ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
           if [ $? -eq 0 ]; then
               /bin/systemctl stop vault
           fi
 
           while true
           do
-              ip --brief add | grep -w {{ keepalived_vip }} > /dev/null
+              /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > \
+              /dev/null
               if [ $? -ne 0 ]; then
                   echo "starting vault server"
                   /bin/systemctl start vault
@@ -173,7 +174,7 @@
               fi
           done
 
-          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
           http://localhost:8200/v1/sys/health)
 
           loop_max=10
@@ -188,7 +189,7 @@
 
               sleep 10
               loop_count=$((loop_count + 1))
-              stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+              stat_code=$(/bin/curl -o /dev/null -s -w "%{http_code}\n" \
               http://localhost:8200/v1/sys/health)
           done
 
@@ -196,7 +197,7 @@
               echo "unsealing vault server"
               source /etc/vault/scripts/unseal.sh
           fi
-        dest: /etc/drbd.d/scripts/failed_promote.sh
+        dest: "{{ drdb_script_path }}/failed_promote.sh"
         owner: root
         group: root
         mode: 0744
@@ -288,6 +289,32 @@
 - name: setup keepalived for vault cluster
   hosts: vault_servers
   become: yes
+  pre_tasks:
+    - name: create keepalived script directory
+      file:
+        path: "{{ keepalived_scripts_path }}"
+        state: directory
+
+    - name: create vault check script
+      copy:
+        content: |-
+          #!/bin/bash
+
+          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
+          http://localhost:8200/v1/sys/health)
+
+          if [ $stat_code -eq 200 ] ||
+          [ $stat_code -eq 501 ] ||
+          [ $stat_code -eq 503 ]; then
+              exit 0
+          else
+              exit 1
+          fi
+        dest: "{{ keepalived_config_path }}/scripts/chk_vault.sh"
+        owner: root
+        group: root
+        mode: 0744
+      register: vault_chk_script
   roles:
     - name: keepalived
       vars:
@@ -348,26 +375,44 @@
                 - "{{ keepalived_vip }}"
               track_script:
                 - chk_vault
-              notify_master: /etc/drbd.d/scripts/promote_to_primary.sh
-              notify_backup: /etc/drbd.d/scripts/demote_to_secondary.sh
+              notify: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
   post_tasks:
-    - name: create vault check script
+    - name: reload keepalived
+      service:
+        name: keepalived
+        state: reloaded
+      when: vault_chk_script is changed
+
+    - name: create cron job for demoting or promoting drbd resource
       copy:
-        content: |-
+        content: |
           #!/bin/bash
 
-          stat_code=$(curl -o /dev/null -s -w "%{http_code}\n" \
-          http://localhost:8200/v1/sys/health)
-
-          if [ $stat_code -eq 200 ] ||
-          [ $stat_code -eq 501 ] ||
-          [ $stat_code -eq 503 ]; then
-              exit 0
-          else
-              exit 1
+          if [ -n "`pidof -x $(basename $0) -o %PPID`" ]; then
+              echo "$(basename $0) is already running."
+              exit
           fi
-        dest: "{{ keepalived_config_path }}/scripts/chk_vault.sh"
+
+          role=$(/sbin/drbdadm role all)
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -eq 0 ] && [ "$role" == "Secondary" ]; then
+              echo "Promoting to primary."
+              /etc/drbd.d/scripts/promote_to_primary.sh
+          fi
+
+          /sbin/ip --brief add | /bin/grep -w {{ keepalived_vip }} > /dev/null
+          if [ $? -ne 0 ] && [ "$role" == "Primary" ]; then
+              echo "Demote to secondary."
+              /etc/drbd.d/scripts/demote_to_secondary.sh
+          fi
+        dest: "{{ keepalived_scripts_path }}/promote_or_demote.sh"
         owner: root
         group: root
         mode: 0744
-      notify: reload keepalived
+
+    - name: create cron job to promote or demote
+      cron:
+        name: "promote or demote drbd"
+        minute: "*/1"
+        job: "{{ keepalived_scripts_path }}/promote_or_demote.sh"

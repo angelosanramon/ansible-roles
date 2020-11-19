@@ -7,6 +7,7 @@ keepalived_run_path: /run/keepalived
 keepalived_pid_file: keepalived.pid
 keepalived_log_path: /var/log/keepalived
 keepalived_log_file: keepalived.log
+keepalived_scripts_path: "{{ keepalived_config_path }}/scripts"
 keepalived_log_error_file: keepalived-error.log
 keepalived_servers_group_name: keepalived_servers
 keepalived_cmdline_options:

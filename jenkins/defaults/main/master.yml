@@ -1,0 +1,57 @@
+---
+jenkins_version: latest
+jenkins_user: jenkins
+jenkins_group: jenkins
+jenkins_http_port: 8080
+jenkins_http_listen_address: 0.0.0.0
+jenkins_https_port: ""
+jenkins_https_listen_address: ""
+jenkins_http2_port: ""
+jenkins_http2_listen_address: ""
+jenkins_https_keystore: ""
+jenkins_https_keystore_password: ""
+jenkins_https_certificate: ""
+jenkins_https_private_key: ""
+jenkins_slave_agent_port: 50000
+jenkins_war_path: /usr/lib/jenkins
+jenkins_home_path: /var/lib/jenkins
+jenkins_cache_path: /var/cache/jenkins
+jenkins_plugins_path: "{{ jenkins_home_path }}/plugins"
+jenkins_casc_path: "{{ jenkins_home_path }}/casc_configs"
+jenkins_tls_path: /etc/jenkins/tls
+jenkins_log_path: /var/log/jenkins
+jenkins_log_file: jenkins.log
+jenkins_pid_path: /run/jenkins
+jenkins_pid_file: jenkins.pid
+jenkins_master_group_name: jenkins_masters
+
+jenkins_cmdline_options: []
+jenkins_java_options: []
+jenkins_environment_variables: []
+jenkins_plugins: []
+
+jenkins_firewall_ports: >-
+  {%- set ports = [] -%}
+  {{- ports.append(jenkins_http_port|string + "/tcp") if 
+      jenkins_http_port|default(-1, true)|int > 0 else None -}}
+  {{- ports.append(jenkins_slave_agent_port|string + "/tcp") if
+      jenkins_slave_agent_port|default(-1, true)|int > 0 else None -}}
+  {{- ports.append(jenkins_https_port|string + "/tcp") if 
+      jenkins_https_port|default(-1, true)|int > 0 else None -}}
+  {{- ports.append(jenkins_http2_port|string + "/tcp") if
+      jenkins_http2_port|default(-1, true)|int > 0 else None -}}
+  {{- ports -}}
+
+jenkins_logrotate_config:
+  paths:
+    - "{{ jenkins_log_path }}/*.log"
+  options:
+    - daily
+    - missingok
+    - rotate 7
+    - dateext
+    - copytruncate
+    - |-
+      postrotate
+          /usr/bin/systemctl restart jenkins
+      endscript
