@@ -1,3 +1,14 @@
+- name: create grafana user group
+  group:
+    name: '{{ grafana_group }}'
+    state: present
+
+- name: create grafana user
+  user:
+    name: '{{ grafana_user }}'
+    group: '{{ grafana_group }}'
+    shell: /bin/false
+
 - name: create grafana directories
   file:
     path: "{{ item }}"

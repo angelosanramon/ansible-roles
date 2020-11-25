@@ -8,9 +8,6 @@
       http://127.0.0.1:{{ vault_port }}/v1/sys/seal-status
   register: vault_seal_check
 
-- set_fact:
-    vault_sealed: '{{ vault_seal_check.json.sealed }}'
-
 - block:
     - name: check if unseal keys file exist
       stat:
@@ -50,8 +47,14 @@
         {{ unseal_keys[:vault_initialization_options.secret_threshold] }}
       register: unseal_vault_result
       no_log: true
+  when: vault_seal_check.json.sealed
 
-    - set_fact:
-        vault_sealed: false
-      when: unseal_vault_result.results[-1].status == 200
-  when: vault_sealed
+- name: wait until unsealed
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/seal-status
+  register: seal_check
+  until: not seal_check.json.sealed
+  retries: 5
+  delay: 10
+

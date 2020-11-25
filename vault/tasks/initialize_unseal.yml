@@ -1,0 +1,29 @@
+- name: initialize vault
+  include_tasks: initialize.yml
+  args:
+    apply:
+      delegate_to: "{{ hostname }}"
+
+- name: unseal vault
+  include_tasks: unseal.yml
+  args:
+    apply:
+      delegate_to: "{{ hostname }}"
+
+- name: check ha enabled
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/leader
+  register: ha_check
+  delegate_to: "{{ hostname }}"
+
+- name: wait for leader
+  uri:
+    url: >-
+      http://127.0.0.1:{{ vault_port }}/v1/sys/leader
+  register: leader_check
+  delegate_to: "{{ hostname }}"
+  until: leader_check.json.leader_address != ""
+  retries: 5
+  delay: 10
+  when: ha_check.json.ha_enabled

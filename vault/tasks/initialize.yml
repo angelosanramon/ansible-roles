@@ -1,19 +1,12 @@
-- name: check if vault is already initialized
-  uri:
-    url: >-
-      http://127.0.0.1:{{ vault_port }}/v1/sys/health
-    status_code: [200, 429, 472, 473, 501, 503]
+- name: check if vault is initialized
+  shell: >-
+    VAULT_ADDR=http://127.0.0.1:{{ vault_port }} /usr/local/bin/vault status | 
+    grep Initialized | awk '{print $2}'
   register: vault_initialize_check
-  delegate_to: '{{ item }}'
-  until: vault_initialize_check.status in [200, 429, 472, 473, 501, 503]
-  retries: 5
-  delay: 10
-  run_once: yes
+  changed_when: false
 
 - set_fact:
-    vault_initialized: '{{ vault_initialize_check.json.initialized }}'
-  delegate_to: '{{ item }}'
-  run_once: yes
+    vault_initialized: '{{ vault_initialize_check.stdout|bool }}'
 
 - block:
     - name: initialize vault
@@ -24,7 +17,6 @@
         body_format: json
         body: '{{ vault_initialization_options }}'
       register: vault_initialize_result
-      no_log: true
 
     - set_fact:
         unseal_keys: '{{ vault_initialize_result.json.values()|list|first }}'
@@ -46,5 +38,3 @@
       loop_control:
         loop_var: dest_host
   when: not vault_initialized
-  delegate_to: '{{ item }}'
-  run_once: yes

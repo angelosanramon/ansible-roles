@@ -5,35 +5,27 @@
 
 - meta: flush_handlers
 
-- name: initialize vault
-  include_tasks: initialize.yml
+- name: initialize and unseal vault
+  include_tasks: initialize_unseal.yml
+  args:
+    apply:
+      delegate_to: localhost
   with_items: '{{ groups[vault_servers_group_name] }}'
+  loop_control:
+    loop_var: hostname
   when: vault_auto_unseal
-
-- name: unseal vault
-  include_tasks: unseal.yml
-  when: vault_auto_unseal
-
-- name: check if vault is in cluster mode
-  uri:
-    url: >-
-      http://127.0.0.1:{{ vault_port }}/v1/sys/leader
-  register: check_cluster_mode_result
-
-- name: perform after install actions
-  include_tasks: postinstall_actions.yml
-  when:
-    - vault_auto_unseal
-    - not vault_sealed
-    - check_cluster_mode_result.json.ha_enabled
   run_once: yes
 
 - name: perform after install actions
   include_tasks: postinstall_actions.yml
-  when:
-    - vault_auto_unseal
-    - not vault_sealed
-    - not check_cluster_mode_result.json.ha_enabled
+  args:
+    apply:
+      delegate_to: "{{ hostname }}"
+  with_items: '{{ groups[vault_servers_group_name] }}'
+  loop_control:
+    loop_var: hostname
+  when: vault_auto_unseal
+  run_once: yes
 
 - name: turn off swapping
   include_tasks: swaps.yml

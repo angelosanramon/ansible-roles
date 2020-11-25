@@ -20,8 +20,18 @@ listener "tcp" {
     {%- for sub_key, sub_value in value.items() -%}
       {{- "\n%s \"%s\" {\n"|format(key, sub_key) -}}
       {%- for sub_sub_key, sub_sub_value in sub_value.items() -%}
-        {{- "%s = %s\n"|format(' '*4 + sub_sub_key, '"' + sub_sub_value + '"' if
-        sub_sub_value is string else sub_sub_value|lower) -}}
+        {%- if sub_sub_key == 'retry_join' -%}
+          {%- for item in sub_sub_value -%}
+            {{- '    retry_join {\n' -}}
+                {%- for key, value in item.items() -%}
+                  {{- "%s = %s\n"|format(' '*8 + key, '"' + value + '"') -}}
+                {%- endfor -%}
+            {{- '    }\n' -}}
+          {%- endfor -%}
+        {%- else -%}
+          {{- "%s = %s\n"|format(' '*4 + sub_sub_key, '"' + sub_sub_value + 
+          '"' if sub_sub_value is string else sub_sub_value|lower) -}}
+        {%- endif -%}
       {%- endfor -%}
       {{- '}' -}}
     {%- endfor -%}

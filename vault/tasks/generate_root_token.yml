@@ -1,3 +1,6 @@
+- set_fact:
+    num_unseal_keys: '{{ vault_unseal_keys|default([], true)|length }}'
+
 - block:
     - name: check if unseal keys file exist
       stat:
