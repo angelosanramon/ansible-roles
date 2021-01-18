@@ -1,0 +1,61 @@
+---
+- name: install logrotate
+  package:
+    name: logrotate
+    state: present
+
+- name: create logrotate.d directory
+  file:
+    path: /etc/logrotate.d
+    state: directory
+    mode: 0755
+
+- block:
+    - name: create default logrotate config file
+      copy:
+        content: |-
+          {% for option in logrotate_default_config_options %}
+          {{ option }}
+          {% endfor %}
+          include /etc/logrotate.d
+        dest: /etc/logrotate.conf
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: install crontab
+      package:
+        name: cronie
+        state: present
+
+    - name: create cron daily directory
+      file:
+        path: /etc/cron.daily
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: create logrotate cron daily cronjob
+      copy:
+        content: |-
+          #!/bin/sh
+
+          /usr/sbin/logrotate /etc/logrotate.conf
+          EXITVALUE=$?
+          if [ $EXITVALUE != 0 ]; then
+              /usr/bin/logger -t logrotate "ALERT exited abnormally with [$EXITVALUE]"
+          fi
+          exit $EXITVALUE
+        dest: /etc/cron.daily/logrotate
+        owner: root
+        group: root
+        mode: 0755
+  when: ansible_os_family == "ClearLinux"
+
+- name: create logrotate config files
+  template:
+    src: logrotate_configs.j2
+    dest: /etc/logrotate.d/{{ item.name }}
+  with_items: "{{ logrotate_config_options }}"
+  notify: restart logrotate

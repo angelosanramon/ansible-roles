@@ -12,19 +12,39 @@
 
 - name: create consul directories
   file:
-    path: '{{ item }}'
+    path: "{{ item.path }}"
     state: directory
-    owner: '{{ consul_user }}'
-    group: '{{ consul_group }}'
+    owner: "{{ item.user }}"
+    group: "{{ item.group }}"
     mode: 0755
   with_items:
-    - "{{ consul_config_path }}"
-    - "{{ consul_configd_path }}"
-    - "{{ consul_data_path }}"
-    - "{{ consul_certs_path }}/certs"
-    - "{{ consul_certs_path }}/keys"
-    - "{{ consul_log_path }}"
-    - "{{ consul_run_path }}"
+    - { path: "{{ consul_bin_path }}",
+        user: root,
+        group: root }
+    - { path: "{{ consul_config_path }}",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_configd_path }}",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_data_path }}",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_certs_path }}/certs",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_certs_path }}/keys",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_log_path }}",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: "{{ consul_run_path }}",
+        user: "{{ consul_user }}",
+        group: "{{ consul_group }}" }
+    - { path: /usr/local/src,
+        user: root,
+        group: root }
 
 - set_fact:
     consul_src_base_url: >-
@@ -33,7 +53,7 @@
 - name: download checksum file
   get_url:
     url: "{{ consul_src_base_url }}/consul_{{ consul_version }}_SHA256SUMS"
-    dest: /usr/local/src
+    dest: /usr/local/src/
 
 - name: read checksum from file
   shell: >-
@@ -45,7 +65,7 @@
 - name: download consul
   get_url:
     url: "{{ consul_src_base_url }}/consul_{{ consul_version }}_linux_amd64.zip"
-    dest: /usr/local/src
+    dest: /usr/local/src/
     checksum: 'sha256:{{ checksum.stdout }}'
 
 - name: install consul

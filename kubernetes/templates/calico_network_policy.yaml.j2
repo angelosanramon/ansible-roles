@@ -1,0 +1,10 @@
+{%- for np in kubernetes_calico_networkpolicy -%}
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  {{ np.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ np.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

@@ -1,0 +1,14 @@
+[Unit]
+Description=Unjoins a node from Kubernetes cluster when the node is shutdown
+DefaultDependencies=no
+Conflicts=reboot.target
+Before=poweroff.target halt.target shutdown.target
+Requires=poweroff.target
+
+[Service]
+Type=oneshot
+ExecStart={{ kubernetes_install_path }}/unjoin.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=shutdown.target

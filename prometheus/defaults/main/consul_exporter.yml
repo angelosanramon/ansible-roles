@@ -12,20 +12,3 @@ consul_exporter_web_listen_port: 9107
 consul_exporter_web_listen_address: >-
   0.0.0.0:{{ consul_exporter_web_listen_port }}
 consul_exporter_cmdline_options: []
-
-consul_exporter_firewall_ports:
-  - "{{ consul_exporter_web_listen_port }}/tcp"
-
-consul_exporter_logrotate_config:
-  paths:
-    - "{{ consul_exporter_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload consul_exporter
-      endscript

@@ -1,0 +1,106 @@
+- name: create calico configuration directory
+  file:
+    path: "{{ kubernetes_calico_config_path }}"
+    mode: 0755
+    state: directory
+
+- name: read etcd ca certificate
+  slurp:
+    src: >-
+      {{ (kubernetes_etcd_location == 'local')|ternary(
+      kubernetes_local_etcd_cafile, kubernetes_external_etcd_cafile) }}
+  register: ca_cert
+
+- name: read etcd certificate
+  slurp:
+    src: >-
+      {{ (kubernetes_etcd_location == 'local')|ternary(
+      kubernetes_local_etcd_certfile, kubernetes_external_etcd_certfile) }}
+  register: etcd_crt
+
+- name: read etcd key
+  slurp:
+    src: >-
+      {{ (kubernetes_etcd_location == 'local')|ternary(
+      kubernetes_local_etcd_keyfile, kubernetes_external_etcd_keyfile) }}
+  register: etcd_key
+
+- set_fact:
+    ca_cert: "{{ ca_cert.content }}"
+    etcd_crt: "{{ etcd_crt.content }}"
+    etcd_key: "{{ etcd_key.content }}"
+
+- name: create calico manifest file
+  template:
+    src: calico.yaml.j2
+    dest: "{{ kubernetes_calico_config_path }}/calico.yaml"
+    owner: root
+    group: root
+    mode: 0644
+  register: calico_config
+
+- name: install calico
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+    {{ kubernetes_install_path }}/kubectl apply -f 
+    {{ kubernetes_calico_config_path }}/calico.yaml
+  register: calico_install
+  when: calico_config is changed
+
+- name: wait for calico install to complete
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+    {{ kubernetes_install_path }}/kubectl get pods -n kube-system |
+    grep calico-node | grep -w Running | grep -w 1/1
+  register: result
+  until: result.rc == 0
+  retries: 10
+  delay: 30
+  when: calico_install is changed
+
+- name: install calicoctl
+  get_url:
+    url: >-
+      {{- 'https://github.com/projectcalico/calicoctl/releases/download/v' +
+      kubernetes_calico_version + '/calicoctl' -}}
+    dest: "{{ kubernetes_install_path }}/calicoctl"
+    mode: 0755
+    validate_certs: no
+    force: yes
+
+- name: create calicoctl config directory
+  file:
+    path: /etc/calico
+    state: directory
+
+- name: create calicoctl config file
+  template:
+    src: calicoctl.cfg.j2
+    dest: "{{ kubernetes_calico_config_path }}/calicoctl.cfg"
+    owner: root
+    group: root
+    mode: 0600
+
+- name: create symbolic link to calicoctl config file
+  file:
+    src: "{{ kubernetes_calico_config_path }}/calicoctl.cfg"
+    dest: /etc/calico/calicoctl.cfg
+    state: link
+
+- name: create calico default resources manifest file for kubernetes
+  template:
+    src: calico_k8s_defaults.yaml.j2
+    dest: "{{ kubernetes_calico_config_path }}/calico_k8s_defaults.yaml"
+    owner: root
+    group: root
+    mode: 0644
+  register: default_resources
+
+- name: apply calico default resources for kubernetes
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_k8s_defaults.yaml
+  when: default_resources is changed
+
+- name: apply extra calico resource definitions
+  include_tasks: apply_extra_calico_resources.yaml

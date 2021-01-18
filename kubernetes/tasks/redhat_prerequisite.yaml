@@ -1,0 +1,38 @@
+- name: install redhat family dependencies
+  package:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - conntrack-tools
+    - socat
+    - tc
+    - libseccomp
+
+- name: load br_netfilter module
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: check if docker repository exist
+  stat:
+    path: /etc/yum.repos.d/docker-ce.repo
+  register: docker_repository
+
+- name: install docker repository
+  shell: >-
+    dnf config-manager --add-repo 
+    https://download.docker.com/linux/centos/docker-ce.repo
+  args:
+    warn: false
+  when: not docker_repository.stat.exists
+
+- name: install docker
+  dnf:
+    name: docker-ce
+    state: present
+
+- name: start and enable docker
+  service:
+    name: docker
+    enabled: yes
+    state: started

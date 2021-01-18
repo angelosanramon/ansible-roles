@@ -1,7 +1,0 @@
-- name: create haproxy logrotate config file
-  template:
-    src: haproxy_logrotate.j2
-    dest: /etc/logrotate.d/haproxy
-    owner: root
-    group: root
-    mode: 0644

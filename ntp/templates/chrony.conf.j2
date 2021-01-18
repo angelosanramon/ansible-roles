@@ -1,0 +1,51 @@
+{%- for server in ntp_chrony_servers if ntp_chrony_servers|length > 0 -%}
+server {{ server }}
+{% endfor %}
+
+{%- if ntp_chrony_pool|default(none, true) is not none -%}
+pool {{ ntp_chrony_pool }}
+{% endif %}
+
+{%- if ntp_chrony_driftfile|default(none, true) is not none -%}
+driftfile {{ ntp_chrony_driftfile }}
+{% endif %}
+
+{%- if ntp_chrony_makestep|default(none, true) is not none -%}
+makestep {{ ntp_chrony_makestep }}
+{% endif %}
+
+{%- if ntp_chrony_rtcsync is defined -%}
+rtcsync {{ ntp_chrony_rtcsync }}
+{% endif %}
+
+{%- if ntp_chrony_logdir|default(none, true) is not none -%}
+logdir {{ ntp_chrony_logdir }}
+{% endif %}
+
+{%- if ntp_chrony_keyfile|default(none, true) is not none -%}
+keyfile {{ ntp_chrony_keyfile }}
+{% endif %}
+
+{%- if ntp_chrony_leapsectz|default(none, true) is not none -%}
+leapsectz {{ ntp_chrony_leapsectz }}
+{% endif %}
+
+{%- if ntp_chrony_hwtimestamp|default(none, true) is not none -%}
+hwtimestamp {{ ntp_chrony_hwtimestamp }}
+{% endif %}
+
+{%- if ntp_chrony_minsources|default(none, true) is not none -%}
+minsources {{ ntp_chrony_minsources }}
+{% endif %}
+
+{%- if ntp_chrony_allow|default(none, true) is not none -%}
+allow {{ ntp_chrony_allow }}
+{% endif %}
+
+{%- if ntp_chrony_local|default(none, true) is not none -%}
+local {{ ntp_chrony_local }}
+{% endif %}
+
+{%- if ntp_chrony_log|default(none, true) is not none -%}
+log {{ ntp_chrony_log }}
+{% endif %}

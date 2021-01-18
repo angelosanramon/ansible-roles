@@ -7,6 +7,7 @@ provisioner:
 
 platforms:
   - name: centos/8
+  #- name: AntonioMeireles/ClearLinux
 
 suites:
   - name: haproxy1
@@ -15,6 +16,9 @@ suites:
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: haproxy1.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.250"}]
@@ -25,6 +29,9 @@ suites:
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: haproxy2.cluster.local
       network:
         - ["private_network", {ip: "192.168.2.250"}]
@@ -35,14 +42,38 @@ suites:
       roles_path: .
       ansible_inventory: hosts
       playbook: playbooks/haproxy-cluster.yml
-      ansible_playbook_command: >-
-        ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant" 
-        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
-        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts
+      custom_pre_install_command: |-
+        if [ -f "/etc/os-release" ]; then
+            /bin/cat /etc/os-release | grep -w "Clear Linux OS" > /dev/null
+            if [ $? -eq 0 ]; then
+                if [ -z "$(/bin/which ansible)" ]; then
+                    sudo swupd bundle-add ansible
+                fi
+            fi
+        fi
+      ansible_playbook_command: |-
+        username=vagrant
+        password=vagrant
+
+        if [ -f "/etc/os-release" ]; then
+            /bin/cat /etc/os-release | grep -w "Clear Linux OS" > /dev/null
+            if [ $? -eq 0 ]; then
+                username=clear
+                password='V@grant!'           
+            fi
+        fi
+
+        ansible-playbook \
+        -e "ansible_user=$username ansible_password=$password" \
+        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 \
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts \
         /tmp/kitchen/haproxy-cluster.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: ansible.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.254"}]

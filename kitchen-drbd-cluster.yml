@@ -14,6 +14,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -23,6 +24,7 @@ suites:
         - ["private_network", {ip: "192.168.1.12"}]
         - ["private_network", {ip: "192.168.3.206"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd1.vdi
@@ -41,6 +43,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -50,6 +53,7 @@ suites:
         - ["private_network", {ip: "192.168.2.12"}]
         - ["private_network", {ip: "192.168.3.207"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd2.vdi
@@ -69,14 +73,18 @@ suites:
       roles_path: .
       ansible_inventory: hosts
       playbook: playbooks/drbd-cluster.yml
-      ansible_playbook_command: >-
-        ansible-playbook -e "ansible_user=vagrant ansible_password=vagrant" 
-        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 
-        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts
+      ansible_playbook_command: |-
+        ansible-playbook \
+        -e "ansible_user=vagrant ansible_password=vagrant"  \
+        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 \
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts \
         /tmp/kitchen/drbd-cluster.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: ansible.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.254"}]

@@ -1,0 +1,57 @@
+{%- set etcd_endpoints = [] -%}
+{%- set cacert = "" -%}
+{%- set cert = "" -%}
+{%- set key = "" -%}
+{%- if kubernetes_etcd_location == 'external' -%}
+  {%- set etcd_endpoints = kubernetes_external_etcd_endpoints -%}
+  {%- set cacert = kubernetes_external_etcd_cafile -%}
+  {%- set cert = kubernetes_external_etcd_certfile -%}
+  {%- set key = kubernetes_external_etcd_keyfile -%}
+{%- else -%}
+  {%- for server in groups[kubernetes_control_plane_group_name] -%}
+    {{- etcd_endpoints.append('https://' + hostvars[server].ansible_host + 
+    ':2379') -}}
+  {%- endfor -%}
+  {%- set cacert = kubernetes_certs_path + '/etcd/ca.crt' -%}
+  {%- set cert = kubernetes_certs_path + '/etcd/peer.crt' -%}
+  {%- set key = kubernetes_certs_path + '/etcd/peer.key' -%}
+{%- endif -%}
+
+#!/bin/bash
+
+export KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+
+# drain node before unjoining
+{{ kubernetes_install_path }}/kubectl drain {{ ansible_nodename }} \
+--ignore-daemonsets --delete-local-data
+
+# delete node
+{{ kubernetes_install_path }}/kubectl delete node {{ ansible_nodename }}
+
+{% if inventory_hostname in groups[kubernetes_control_plane_group_name] %}
+etcd_endpoints={{ etcd_endpoints|join(',') }}
+member_id=$({{ kubernetes_install_path }}/etcdctl \
+--endpoints=[$etcd_endpoints] \
+--cacert {{ cacert }} \
+--cert {{ cert }} \
+--key {{ key }} \
+member list | \
+grep {{ ansible_nodename }} | \
+awk '{print $1}' | \
+awk -F, '{print $1}' || echo "")
+
+if [ "$member_id" != "" ]; then
+    {{ kubernetes_install_path }}/etcdctl \
+    --endpoints=[$etcd_endpoints] \
+    --cacert {{ cacert }} \
+    --cert {{ cert }} \
+    --key {{ key }} \
+    member remove $member_id
+fi
+{% endif %}
+
+# reset kubeadm installation
+{{ kubernetes_install_path }}/kubeadm reset --force
+
+# clean up virtual networking settings
+rm -rf /etc/cni/net.d

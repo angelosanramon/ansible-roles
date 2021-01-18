@@ -1,0 +1,279 @@
+- set_fact:
+    resource_kind: BGPConfiguration
+    calico_resource_configuration: "{{ kubernetes_calico_bgp_configuration }}"
+
+- name: create calico bgp configurations
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path +
+      '/calico_bgp_configurations.yaml' }}
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: bgp_configurations
+
+- name: apply calico bgp configuration
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_bgp_configurations.yaml
+  when: bgp_configurations is changed
+
+- set_fact:
+    resource_kind: BGPPeer
+    calico_resource_configuration: "{{ kubernetes_calico_bgp_peer }}"
+
+- name: create calico bgp peers
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path +
+      '/calico_bgp_peers.yaml' }}
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: bgp_peers
+
+- name: apply calico bgp peer
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_bgp_peers.yaml
+  when: bgp_peers is changed
+
+- set_fact:
+    resource_kind: FelixConfiguration
+    calico_resource_configuration: "{{ kubernetes_calico_felix_configuration }}"
+
+- name: create calico felix configuration
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path +
+      '/calico_felix_configurations.yaml' }}
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: felix_configurations
+
+- name: apply calico felix configuration
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_felix_configurations.yaml
+  when: felix_configurations is changed
+
+- set_fact:
+    resource_kind: GlobalNetworkPolicy
+    calico_resource_configuration: >-
+      {{ kubernetes_calico_global_network_policy }}
+
+- name: create calico global network policies
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_global_network_policies.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: global_network_policies
+
+- name: apply calico global network policies
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_global_network_policies.yaml
+  when: global_network_policies is changed
+
+- set_fact:
+    resource_kind: GlobalNetworkSet
+    calico_resource_configuration: "{{ kubernetes_calico_global_network_set }}"
+
+- name: create calico global network sets
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_global_network_sets.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: global_network_sets
+
+- name: apply calico global network sets
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_global_network_sets.yaml
+  when: global_network_sets is changed
+
+- set_fact:
+    resource_kind: HostEndpoint
+    calico_resource_configuration: "{{ kubernetes_calico_host_endpoint }}"
+
+- name: create calico host endpoints
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_host_endpoints.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: host_endpoints
+
+- name: apply calico host endpoints
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_host_endpoints.yaml
+  when: host_endpoints is changed
+
+- set_fact:
+    resource_kind: IPPool
+    calico_resource_configuration: "{{ kubernetes_calico_ip_pool }}"
+
+- name: create calico ip pools
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_ip_pools.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: ip_pools
+
+- name: apply calico ip pools
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_ip_pools.yaml
+  when: ip_pools is changed
+
+- set_fact:
+    resource_kind: KubeControllersConfiguration
+    calico_resource_configuration: >-
+      {{ kubernetes_calico_kube_controllers_configuration }}
+
+- name: create calico kube controller configurations
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path +
+      '/calico_kube_controller_configurations.yaml' }}
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: kube_controller_configurations
+
+- name: apply calico kube controller configurations
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path + 
+    '/calico_kube_controller_configurations.yaml' }}
+  when: kube_controller_configurations is changed
+
+- set_fact:
+    resource_kind: NetworkPolicy
+    calico_resource_configuration: "{{ kubernetes_calico_network_policy }}"
+
+- name: create calico network policies
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_network_policies.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: network_policies
+
+- name: apply calico network policies
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_network_policies.yaml
+  when: network_policies is changed
+
+- set_fact:
+    resource_kind: NetworkSet
+    calico_resource_configuration: "{{ kubernetes_calico_network_set }}"
+
+- name: create calico network sets
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_network_sets.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: network_sets
+
+- name: apply calico network sets
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_network_sets.yaml
+  when: network_sets is changed
+
+- set_fact:
+    resource_kind: Node
+    calico_resource_configuration: "{{ kubernetes_calico_node }}"
+
+- name: create calico nodes
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_nodes.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: nodes
+
+- name: apply calico nodes
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_nodes.yaml
+  when: nodes is changed
+
+- set_fact:
+    resource_kind: Profile
+    calico_resource_configuration: "{{ kubernetes_calico_profile }}"
+
+- name: create calico profiles
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_profiles.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: profiles
+
+- name: apply calico profiles
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_profiles.yaml
+  when: profiles is changed
+
+- set_fact:
+    resource_kind: WorkloadEndpoint
+    calico_resource_configuration: "{{ kubernetes_calico_workload_endpoint }}"
+
+- name: create calico workload endpoints
+  template:
+    src: calico_resource_configuration.yaml.j2
+    dest: >-
+      {{ kubernetes_calico_config_path }}/calico_workload_endpoints.yaml
+    owner: root
+    group: root
+    mode: 0644
+  when: calico_resource_configuration|length > 0
+  register: workload_endpoints
+
+- name: apply calico workload endpoints
+  shell: >-
+    {{ kubernetes_install_path }}/calicoctl apply -f
+    {{ kubernetes_calico_config_path }}/calico_workload_endpoints.yaml
+  when: workload_endpoints is changed

@@ -1,0 +1,74 @@
+- name: get control plane nodes
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+    {{ kubernetes_install_path }}/kubectl get nodes 2>/dev/null |
+    grep master | grep {{ hostvars[item].ansible_nodename }} >/dev/null 2>&1
+    && echo {{ hostvars[item].inventory_hostname }} || echo ''
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups[kubernetes_control_plane_group_name] }}"
+  register: get_control_planes
+  changed_when: false
+
+- name: get worker nodes
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+    {{ kubernetes_install_path }}/kubectl get nodes 2>/dev/null |
+    grep worker | grep {{ hostvars[item].ansible_nodename }} >/dev/null 2>&1
+    && echo {{ hostvars[item].inventory_hostname }} || echo ''
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups[kubernetes_workers_group_name] }}"
+  register: get_worker
+  changed_when: false
+
+- set_fact:
+    control_plane_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for result in get_control_planes.results -%}
+        {{- nodes.append(result.stdout) if result.stdout != "" else "" -}}
+      {%- endfor -%}
+      {{- nodes -}}
+    worker_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for result in get_worker.results -%}
+        {{- nodes.append(result.stdout) if result.stdout != "" else "" -}}
+      {%- endfor -%}
+      {{- nodes -}}
+
+- name: get current kubernetes version
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+    {{ kubernetes_install_path }}/kubectl version --short | 
+    grep -w 'Server Version' | awk '{print $3}'
+  register: current_version
+  delegate_to: "{{ control_plane_nodes|first }}"
+  changed_when: false
+
+- set_fact:
+    current_version: "{{ current_version.stdout }}"
+    upgrade_version: "v{{ kubernetes_version }}"
+
+- block:
+    - name: upgrade cluster
+      include_tasks: upgrade_first_control_plane.yaml
+      args:
+        apply:
+          delegate_to: "{{ control_plane_nodes|first }}"
+
+    - name: upgrade control planes
+      include_tasks: upgrade_control_plane.yaml
+      args:
+        apply:
+          delegate_to: "{{ control_plane }}"
+      with_items: "{{ control_plane_nodes[1:] }}"
+      loop_control:
+        loop_var: control_plane
+
+    - name: upgrade worker nodes
+      include_tasks: upgrade_worker_node.yaml
+      args:
+        apply:
+          delegate_to: "{{ worker_node }}"
+      with_items: "{{ worker_nodes }}"
+      loop_control:
+        loop_var: worker_node
+  when: upgrade_version is version(current_version, '>') 

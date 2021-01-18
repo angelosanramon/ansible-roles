@@ -8,7 +8,11 @@
 
 - set_fact:
     all_tokens_accessor_ids: >-
-      {{ get_all_tokens_result.json|json_query('[*].AccessorID') }}
+      {%- set tokens = [] -%}
+      {%- for token in get_all_tokens_result.json -%}
+        {{ tokens.append(token.AccessorID) }}
+      {%- endfor -%}
+      {{ tokens }}
     param_accessor_id: "{{ acl_token.AccessorID|default('', true) }}"
     param_secret_id: "{{ acl_token.SecretID|default('', true) }}"
 
@@ -26,9 +30,17 @@
 
 - set_fact:
     all_tokens: >-
-      {{ get_secretids_result.results|json_query('[*].json') }}
+      {%- set ids = [] -%}
+      {%- for id in get_secretids_result.results -%}
+        {{ ids.append(id.json) }}
+      {%- endfor -%}
+      {{ ids }}
     all_tokens_secret_ids: >-
-      {{ get_secretids_result.results|json_query('[*].json.SecretID') }}
+      {%- set ids = [] -%}
+      {%- for id in get_secretids_result.results -%}
+        {{ ids.append(id.json.SecretID) }}
+      {%- endfor -%}
+      {{ ids }}
 
 - name: create acl token
   uri:
@@ -47,6 +59,7 @@
     - create_acl_token_result.status != 200
     - '"AccessorID field is immutable" not in create_acl_token_result.content'
     - '"SecretID is already in use" not in create_acl_token_result.content'
+    - '"AccessorID is already in use" not in create_acl_token_result.content'
 
 - name: update acl token if already exists
   block:
@@ -80,10 +93,30 @@
             list|first }}
           {%- endif -%}
         param_description: "{{ acl_token.Description|default('', true) }}"
-        param_policy_names: "{{ acl_token.Policies|json_query('[*].Name') }}"
-        param_policy_ids: "{{ acl_token.Policies|json_query('[*].ID') }}"
-        param_role_names: "{{ acl_token.Roles|json_query('[*].Name') }}"
-        param_role_ids: "{{ acl_token.Roles|json_query('[*].ID') }}"
+        param_policy_names: >-
+          {%- set policies = [] -%}
+          {%- for policy in acl_token.Policies|default([], true) -%}
+            {{ policies.append(policy.Name) if policy.Name is defined else "" }}
+          {%- endfor -%}
+          {{ policies }}
+        param_policy_ids: >-
+          {%- set policies = [] -%}
+          {%- for policy in acl_token.Policies|default([], true) -%}
+            {{ policies.append(policy.ID) if policy.ID is defined else "" }}
+          {%- endfor -%}
+          {{ policies }}
+        param_role_names: >-
+          {%- set roles = [] -%}
+          {%- for role in acl_token.Roles|default([], true) -%}
+            {{ roles.append(role.Name) if role.Name is defined else "" }}
+          {%- endfor -%}
+          {{ roles }}
+        param_role_ids: >-
+          {%- set roles = [] -%}
+          {%- for role in acl_token.Roles|default([], true) -%}
+            {{ roles.append(role.ID) if role.ID is defined else "" }}
+          {%- endfor -%}
+          {{ roles }}
         param_serviceidentities: >-
           {{ acl_token.ServiceIdentities|default([], true) }}
         param_nodeidentities: >-

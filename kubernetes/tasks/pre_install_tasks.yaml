@@ -1,0 +1,53 @@
+---
+- name: create kubernetes directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ kubernetes_install_path }}"
+    - "{{ kubernetes_config_path }}"
+    - "{{ kubernetes_certs_path }}"
+    - "{{ kubernetes_kubelet_static_pod_path }}"
+    - "{{ kubernetes_cni_plugin_bin_path }}"
+
+- name: set selinux in permissive mode
+  selinux:
+    policy: targeted
+    state: permissive
+  when: ansible_distribution != "Clear Linux OS"
+
+- name: add kubernetes nodes to hosts file
+  include_tasks: hostsfile.yml
+
+- block:
+    - name: install conntrac tools
+      shell: rpm-ostree install --idempotent conntrack-tools
+      register: conntrac_tools_install
+      changed_when: false
+
+    - name: apply conntrac tools install
+      shell: rpm-ostree ex livefs --i-like-danger
+      when: "'start a reboot' in conntrac_tools_install.stdout"
+
+    # - name: reboot after installing conntrack-tools
+    #   reboot:
+    #   when: "'start a reboot' in conntrac_tools_install.stdout"
+  when: ansible_pkg_mgr == "atomic_container"
+
+- name: install non-coreos redhat family prerequisite
+  include_tasks: redhat_prerequisite.yaml
+  when: 
+    - ansible_os_family == "RedHat"
+    - ansible_pkg_mgr != "atomic_container"
+
+- name: disable swap
+  include_tasks: disable_swap.yaml
+  when: ansible_os_family != "atomic_container"
+
+- name: unmask docker service for clear linux
+  systemd:
+    name: docker
+    state: started
+    masked: no
+  when: ansible_os_family == "ClearLinux"

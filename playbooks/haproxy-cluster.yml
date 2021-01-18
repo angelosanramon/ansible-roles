@@ -1,20 +1,54 @@
 ---
-- name: sync clock
-  hosts: haproxy_servers
-  become: yes
-  roles:
-    - name: chrony
-
 - name: setup haproxy cluster
   hosts: haproxy_servers
   become: yes
   roles:
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: keepalived.conf
+            configuration: |-
+              if ($programname startswith "Keepalived") then {
+                  action(type="omfile" file="/var/log/keepalived/keepalived.log")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: haproxy
-
-- name: setup keepalived for haproxy cluster
-  hosts: haproxy_servers
-  become: yes
-  roles:
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100

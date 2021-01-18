@@ -8,7 +8,11 @@
 
 - set_fact:
     all_policies_names: >-
-      {{ get_all_policy_result.json|json_query('[*].Name') }}
+      {%- set policy_names = [] -%}
+      {%- for policy in get_all_policy_result.json -%}
+        {{ policy_names.append(policy.Name) }}
+      {%- endfor -%}
+      {{ policy_names }}
 
 - name: create acl policy
   uri:

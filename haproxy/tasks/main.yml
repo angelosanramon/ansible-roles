@@ -4,12 +4,3 @@
 
 - name: build and install haproxy
   include_tasks: install.yml
-
-- name: enable firewalld
-  include_tasks: firewalld.yml
-
-- name: configure logrotate
-  include_tasks: logrotate.yml
-
-- name: configure rsyslog
-  include_tasks: syslog.yml

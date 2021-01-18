@@ -1,0 +1,35 @@
+---
+kubernetes_version: 1.17.16
+kubernetes_cluster_endpoint: 192.168.1.17:6443
+kubernetes_cluster_name: mycluster
+kubernetes_pod_network_cidr: 172.16.0.0/16
+kubernetes_service_cidr: 10.32.0.0/20
+kubernetes_service_port_range: 30000-32767
+kubernetes_service_dns_domain: cluster.local
+kubernetes_install_path: /usr/local/bin
+kubernetes_config_path: /etc/kubernetes
+kubernetes_certs_path: "{{ kubernetes_config_path }}/pki"
+kubernetes_control_plane_group_name: kubernetes_control_planes
+kubernetes_workers_group_name: kubernetes_workers
+
+kubernetes_cni_plugin_version: 0.9.0
+kubernetes_cni_plugin_bin_path: /opt/cni/bin
+kubernetes_cni_provider: calico
+kubernetes_crictl_version: 1.19.0
+
+kubernetes_kubelet_port: 10250
+kubernetes_kubelet_root_path: /var/lib/kubelet
+kubernetes_kubelet_cgroup_driver: systemd
+kubernetes_kubelet_runtime_cgroups: /systemd/system.slice
+kubernetes_kubelet_static_pod_path: "{{ kubernetes_config_path }}/manifests"
+kubernetes_kubelet_volume_plugin_path: >-
+  /opt/libexec/kubernetes/kubelet-plugins/volume/exec
+
+kubernetes_etcd_location: local #external
+kubernetes_local_etcd_cafile: "{{ kubernetes_certs_path }}/etcd/ca.crt"
+kubernetes_local_etcd_certfile: "{{ kubernetes_certs_path }}/etcd/peer.crt"
+kubernetes_local_etcd_keyfile: "{{ kubernetes_certs_path }}/etcd/peer.key"
+kubernetes_external_etcd_endpoints: []
+kubernetes_external_etcd_cafile: ""  # path to external etcd ca cert file
+kubernetes_external_etcd_certfile: ""  # path to external etcd peer cert file
+kubernetes_external_etcd_keyfile: ""  # path to external etcd peer key file

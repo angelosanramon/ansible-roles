@@ -2,10 +2,16 @@
 An Ansible role to install Prometheus monitoring application.
 
 ### Requirements:
-* Ansible needs to be installed on the host running this playbook. Tested on version 2.9.11.
+* Ansible needs to be installed on the host running this playbook.
 
 ### Platform:
-* Tested on Centos 8 only
+* Centos 8
+* ClearLinux
+
+## Test-Kitchen Environment
+### Requirements for local test-kitchen environment:
+- Vagrant with plugins: vagrant-guests-clearlinux
+- Virtualbox
 
 ### Author:
 Angelo San Ramon

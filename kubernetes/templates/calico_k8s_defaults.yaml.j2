@@ -1,0 +1,93 @@
+{%- set control_planes_ip_address = [] -%}
+{%- set worker_nodes_ip_address = [] -%}
+{%- for server in groups[kubernetes_control_plane_group_name] -%}
+  {%- set ip_address = hostvars[server].ansible_host + '/32' -%}
+  {{ control_planes_ip_address.append(ip_address) }}
+{%- endfor -%}
+{%- for server in groups[kubernetes_workers_group_name] -%}
+  {%- set ip_address = hostvars[server].ansible_host + '/32' -%}
+  {{ worker_nodes_ip_address.append(ip_address) }}
+{%- endfor -%}
+{%- set ip_addresses = control_planes_ip_address + 
+  worker_nodes_ip_address -%}
+---
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+  ipipEnabled: {{ true if kubernetes_calico_overlay_mode == 'ipip' else false }}
+  failsafeInboundHostPorts:
+    - protocol: tcp
+      port: 22
+    - protocol: udp
+      port: 68
+---
+apiVersion: projectcalico.org/v3
+kind: KubeControllersConfiguration
+metadata:
+  name: default
+spec:
+  controllers:
+    node:
+      hostEndpoint:
+        autoCreate: Enabled
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: k8s-inter-cluster-ingress
+spec:
+  order: 1
+  selector: has(kubernetes.io/hostname)
+  ingress:
+    - action: Allow
+      source:
+        nets: {{ '\n' + ip_addresses|to_nice_yaml|indent(width=10,first=true) }}
+    - action: Allow
+      destination:
+        nets:
+          - 127.0.0.1/32
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: k8s-control-plane-ingress
+spec:
+  order: 2
+  selector: has(node-role.kubernetes.io/master)
+  ingress:          
+    - action: Allow
+      protocol: TCP
+      destination:
+        ports:
+          - "{{ kubernetes_cluster_endpoint.split(':')[1] }}"
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: k8s-worker-ingress
+spec:
+  order: 3
+  selector: has(node-role.kubernetes.io/worker)
+  ingress:          
+    - action: Allow
+      protocol: TCP
+      destination:
+        ports:
+          - "{{ kubernetes_service_port_range|replace('-',':') }}"
+    - action: Allow
+      protocol: UDP
+      destination:
+        ports:
+          - "{{ kubernetes_service_port_range|replace('-',':') }}"
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  #order: 100
+  selector: has(kubernetes.io/hostname)
+  ingress:
+    - action: Deny

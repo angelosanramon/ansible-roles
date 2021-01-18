@@ -1,4 +1,4 @@
-vault_version: 1.6.0
+vault_version: 1.6.1
 vault_user: vault
 vault_group: vault
 vault_bin_path: /usr/local/bin
@@ -174,21 +174,3 @@ vault_userpass_users: []
 #     password: mypassword
 #     token_policies:
 #       - vault_admin
-
-vault_firewall_ports:
-  - '{{ vault_port }}-{{ vault_cluster_port }}/tcp'
-
-# Enable logrotate on all .log files under /var/log/vault directory
-vault_logrotate_config:
-  paths:
-    - "{{ vault_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload vault
-      endscript

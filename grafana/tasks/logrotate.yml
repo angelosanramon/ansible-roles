@@ -1,7 +1,0 @@
-- name: create grafana logrotate config file
-  template:
-    src: logrotate.j2
-    dest: /etc/logrotate.d/grafana
-    owner: root
-    group: root
-    mode: 0644

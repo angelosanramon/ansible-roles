@@ -16,20 +16,3 @@ blackbox_exporter_web_listen_address: >-
 blackbox_exporter_cmdline_options: []
 
 blackbox_exporter_modules_config: {}
-
-blackbox_exporter_firewall_ports:
-  - "{{ blackbox_exporter_web_listen_port }}/tcp"
-
-blackbox_exporter_logrotate_config:
-  paths:
-    - "{{ blackbox_exporter_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload blackbox_exporter
-      endscript

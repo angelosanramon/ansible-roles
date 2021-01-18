@@ -71,25 +71,11 @@ keepalived_configs:
   #     track_script:
   #       - chk_haproxy
 
-keepalived_logrotate_config:
-  paths:
-    - "{{ keepalived_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload keepalived
-      endscript
-
 keepalived_build_dependencies:
   - make
-  - gcc
-  - openssl-devel
-  - libnl3-devel
-  - iptables-devel
-  - net-snmp-devel
-  - glib2-devel
+  - "{{ 'c-basic' if ansible_os_family == 'ClearLinux' else 'gcc' }}"
+  - "{{ 'devpkg-openssl' if ansible_os_family == 'ClearLinux' else 'openssl-devel' }}"
+  - "{{ 'devpkg-libnl' if ansible_os_family == 'ClearLinux' else 'libnl3-devel' }}"
+  - "{{ 'devpkg-iptables' if ansible_os_family == 'ClearLinux' else 'iptables-devel' }}"
+  #- "{{ omit if ansible_os_family == 'ClearLinux' else 'net-snmp-devel' }}"
+  - "{{ 'devpkg-glib' if ansible_os_family == 'ClearLinux' else 'glib2-devel' }}"

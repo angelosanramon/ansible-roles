@@ -1,14 +1,30 @@
 ---
-- name: sync clock
-  hosts: vault_servers
-  become: yes
-  roles:
-    - name: chrony
-
 - name: setup vault cluster
   hosts: vault_servers
   become: yes
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8200/tcp
+          - 8201/tcp
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: vault
+            paths:
+              - "{{ vault_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload vault
+                endscript
     - name: vault
       vars:
         vault_config_options:
@@ -110,6 +126,43 @@
         name: keepalived
         tasks_from: sysctl
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+          - 8200/tcp
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: haproxy
       vars:
         haproxy_defaults_config:
@@ -141,9 +194,6 @@
                 hostvars[hostname].ansible_host + ':' + '8200') }}
               {%- endfor -%}
               {{ servers }}
-        haproxy_firewall_ports:
-          - 8404/tcp
-          - 8200/tcp
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100

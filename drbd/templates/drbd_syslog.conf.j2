@@ -1,5 +1,0 @@
-if $programname == "drbd" or ($syslogtag == "kernel:" and
-$msg contains "drbd") then {
-    action(type="omfile" file="{{ drdb_log_path }}/{{ drbd_log_file }}")
-    stop
-}

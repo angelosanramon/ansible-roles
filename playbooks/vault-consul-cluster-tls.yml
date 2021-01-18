@@ -6,8 +6,8 @@
     - name: letsencrypt
       vars:
         letsencrypt_acme_email: email@example.com
-        letsencrypt_aws_access_key: my_aws_access_key
-        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_aws_access_key: aws_access_key
+        letsencrypt_aws_secret_key: aws_secret_key
         letsencrypt_route53_zone: example.com
         letsencrypt_certificates:
           - common_name: example.com
@@ -24,21 +24,15 @@
           - common_name: vault2.cluster.local
             subject_alt_names:
               - IP:192.168.2.11
+          - common_name: vault3.cluster.local
+            subject_alt_names:
+              - IP:192.168.3.11
           - common_name: haproxy1.cluster.local
             subject_alt_names:
               - IP:192.168.1.250
           - common_name: haproxy2.cluster.local
             subject_alt_names:
               - IP:192.168.2.250
-
-- name: sync clock
-  hosts:
-    - consul_servers
-    - vault_servers
-    - haproxy_servers
-  become: yes
-  roles:
-    - name: chrony
 
 - name: setup consul cluster
   hosts: consul_servers
@@ -55,6 +49,33 @@
         cert_group: "{{ consul_group }}"
       register: copy_self_signed_certs
   roles: 
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8600/tcp
+          - 8600/udp
+          - 8500-8501/tcp
+          - 8301-8302/tcp
+          - 8301-8302/udp
+          - 8300/tcp
+          - 21000-21255/tcp
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: consul
+            paths:
+              - "{{ consul_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload consul
+                endscript
     - name: consul
       vars:
         consul_config_options:
@@ -186,6 +207,43 @@
         cert_group: "{{ vault_group }}"
       register: copy_self_signed_certs
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8200/tcp
+          - 8201/tcp
+          - 8301/tcp
+          - 8301/udp
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: vault
+            paths:
+              - "{{ vault_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload vault
+                endscript
+          - name: consul
+            paths:
+              - "{{ consul_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload consul
+                endscript
     - name: consul
       vars:
         consul_config_options:
@@ -344,6 +402,44 @@
         cert_group: "{{ haproxy_group }}"
       register: copy_self_signed_certs
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+          - 8500/tcp
+          - 8200/tcp
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: haproxy
       vars:
         haproxy_defaults_config:

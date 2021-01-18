@@ -1,23 +1,15 @@
 - set_fact:
-    required_plugins:
-      - { name: snakeyaml-api, version: latest }
-      - { name: configuration-as-code, version: latest }
-      - { name: configuration-as-code-groovy, version: latest }
-      - { name: swarm, version: latest }
-      - { name: script-security, version: latest }
-      - { name: command-launcher, version: latest }
-      - { name: jdk-tool, version: latest }
-      - { name: trilead-api, version: latest }
-
-- set_fact:
-    selected_plugins: "{{ jenkins_plugins + required_plugins }}"
+    selected_plugins: >-
+      {{ jenkins_mandatory_plugins + jenkins_plugins }}
 
 - name: install plugins
   get_url:
     url: >-
-      https://ftp-nyc.osuosl.org/pub/jenkins/plugins/{{ 
-      item.name }}/{{ item.version|default('latest', true)|string }}/{{
-      item.name }}.hpi
+      {{ [jenkins_plugins_url, 
+          item.name, 
+          item.version|default('latest', true)|string,
+          item.name + '.hpi'
+         ]|join('/') }}
     dest: "{{ jenkins_plugins_path }}/{{ item.name + '.jpi' }}"
   with_items: "{{ selected_plugins }}"
   notify: restart jenkins

@@ -1,0 +1,10 @@
+{%- for gnp in kubernetes_calico_globalnetworkpolicy -%}
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  {{ gnp.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ gnp.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

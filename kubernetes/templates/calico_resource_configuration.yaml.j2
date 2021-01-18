@@ -1,0 +1,10 @@
+{%- for rc in calico_resource_configuration -%}
+---
+apiVersion: projectcalico.org/v3
+kind: {{ resource_kind }}
+metadata:
+  {{ rc.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ rc.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

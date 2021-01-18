@@ -91,6 +91,3 @@
   when: 
     - consul_agent_mode == 'server'
     - consul_config_options.acl.enabled|default(false, true)
-
-- name: configure logrotate
-  include_tasks: logrotate.yml

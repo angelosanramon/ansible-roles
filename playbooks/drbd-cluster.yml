@@ -2,7 +2,21 @@
   hosts: drbd_servers
   become: yes
   roles:
-    - name: chrony
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: drbd.conf
+            configuration: |-
+              if $programname == "drbd" or ($syslogtag == "kernel:" and
+              $msg contains "drbd") then {
+                  action(type="omfile" file="{{ drdb_log_path }}/{{ drbd_log_file }}")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ drbd_listen_ports }}/tcp"
     - name: drbd
       vars:
         drbd_resources_conf:

@@ -4,12 +4,3 @@
 
 - name: set sysctl settings
   include_tasks: sysctl.yml
-
-- name: enable firewall
-  include_tasks: firewalld.yml
-
-- name: configure logrotate
-  include_tasks: logrotate.yml
-
-- name: configure rsyslog
-  include_tasks: syslog.yml

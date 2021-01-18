@@ -1,6 +1,0 @@
-{%- for path in logrotate_config.paths -%}
-  {{- path + '\n' -}}{{ '{\n' if loop.last else '' }}
-{%- endfor -%}
-{%- for option in logrotate_config.options -%}
-  {{- ' '*4 + option|indent() + '\n' -}}{{ '}' if loop.last else '' }}
-{%- endfor -%}

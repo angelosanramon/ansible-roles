@@ -1,0 +1,150 @@
+- name: setup haproxy cluster for kubernetes cluster
+  hosts: haproxy_servers
+  become: yes
+  vars:
+    keepalived_vip: 192.168.3.100
+  pre_tasks:
+    - name: allow binding of non-existing ip address
+      include_role:
+        name: keepalived
+        tasks_from: sysctl
+  roles:
+    - name: ntp
+    - name: rsyslog
+    - name: haproxy
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+          - "{{ kubernetes_port }}/tcp"
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: haproxy
+      vars:
+        kubernetes_port: 6443
+        haproxy_defaults_config:
+          mode: tcp
+          option: tcplog
+          log: global
+          timeout:
+            - connect 10s
+            - client 30s
+            - server 30s
+        haproxy_frontends_config:
+          kubernetes_cluster:
+            bind: "{{ keepalived_vip }}:{{ kubernetes_port }}"
+            use_backend: kubernetes_control_planes
+        haproxy_backends_config:
+          kubernetes_control_planes:
+            balance: roundrobin
+            default-server: check check-ssl verify none inter 10s
+            server: >-
+              {%- set servers = [] -%}
+              {%- for server in groups.kubernetes_control_planes -%}
+              {{ servers.append(server + ' ' +
+                hostvars[server].ansible_host + ':' + kubernetes_port|string) }}
+              {%- endfor -%}
+              {{ servers }}
+    - name: keepalived
+      vars:
+        keepalived_network: >-
+          {{ keepalived_vip.split('.')[:-1]|join('.') + '.0' }}
+        keepalived_configs:
+          global_defs:
+            script_user: root root
+            enable_script_security:
+            notification_email:
+              - email@example.com
+          vrrp_script:
+            - name: chk_haproxy
+              script: "'/usr/sbin/pidof haproxy'"
+              interval: 5
+              weight: 2
+          vrrp_instance:
+            - name: HAPROXY_LB
+              interface: |-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- key -}}
+                {%- endfor -%}
+              state: >-
+                {{- 'MASTER' if groups.haproxy_servers|first ==
+                inventory_hostname else 'BACKUP' -}}
+              priority: >-
+                {%- for hostname in groups.haproxy_servers|reverse -%}
+                  {%- if hostname == inventory_hostname -%}
+                    {{- loop.index -}}
+                  {%- endif -%}
+                {%- endfor -%}
+              virtual_router_id: 1
+              smtp_alert:
+              authentication:
+                auth_type: PASS
+                auth_pass: mypassword
+              unicast_src_ip: >-
+                {%- for key, value in ansible_facts.items() if
+                  value.ipv4.network is defined and
+                  value.ipv4.network == keepalived_network -%}
+                {{- value.ipv4.address -}}
+                {%- endfor -%}
+              unicast_peer: >-
+                {%- set servers = [] -%}
+                {%- for hostname in groups.haproxy_servers if
+                  hostname != inventory_hostname -%}
+                  {%- for key, value in hostvars[hostname].ansible_facts.items() if
+                    value.ipv4.network is defined and
+                    value.ipv4.network == keepalived_network -%}
+                    {{- servers.append(value.ipv4.address) -}}
+                  {%- endfor -%}
+                {%- endfor -%}
+                {{- servers -}}
+              virtual_ipaddress:
+                - "{{ keepalived_vip }}"
+              track_script:
+                - chk_haproxy
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
+
+- name: setup kubernetes cluster
+  hosts:
+    - kubernetes_control_planes
+    - kubernetes_workers
+  become: yes
+  roles:
+    - name: kubernetes
+      vars:
+        kubernetes_version: 1.17.16
+        #kubernetes_cluster_endpoint: 192.168.1.17:6443
+        kubernetes_cluster_endpoint: 192.168.3.100:6443
+        kubernetes_kubeadm_init_cmdline_flags:
+          - --ignore-preflight-errors="NumCPU"
+        kubernetes_kubeadm_join_cmdline_flags:
+          - --ignore-preflight-errors="NumCPU"

@@ -1,0 +1,101 @@
+- set_fact:
+    kubernetes_kubeadm_joinconfiguration: >-
+      {{- kubernetes_kubeadm_joinconfiguration|combine({
+            'controlPlane': {
+              'localAPIEndpoint': {
+                'advertiseAddress': ansible_host, 
+                'bindPort': kubernetes_cluster_endpoint.split(':')[1]|int 
+              },
+              'certificateKey': kubeadm_join_certificate_key
+            }
+          }, recursive=True)
+      -}}
+
+- name: generate kubeadm join control plane config file
+  template:
+    src: kubeadm_join_config.yaml.j2
+    dest: "{{ kubernetes_config_path }}/kubeadm_join_config.yaml"
+    mode: 0644
+
+- block:
+    - name: check if control plane has been joined previously
+      find:
+        paths: "{{ kubernetes_kubelet_static_pod_path }}"
+        patterns: "*.*"
+      register: find_result
+
+    - name: unjoin control plane when previously joined
+      shell: "{{ kubernetes_install_path }}/unjoin.sh"
+      when: find_result.files|length > 0
+      changed_when: false
+
+    - name: joining control plane node
+      shell: >-
+        source /etc/profile.d/k8stools-path.sh &&
+        {{ kubernetes_install_path }}/kubeadm join
+        --config {{ kubernetes_config_path }}/kubeadm_join_config.yaml
+        {{ kubernetes_kubeadm_join_cmdline_flags|join(" ") }}
+      changed_when: false
+
+    - name: waiting for control plane node to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+        {{ kubernetes_install_path }}/kubectl get nodes -o wide | 
+        grep {{ ansible_host }} | grep -w Ready
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 30
+      changed_when: false
+
+    - name: wait for etcd to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep etcd | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+      when: kubernetes_etcd_location == 'local'
+
+    - name: wait for api-server to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-apiserver | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-controller-manager to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-controller-manager | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-scheduler to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-scheduler | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-proxy to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-proxy | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+  when: inventory_hostname not in control_plane_nodes

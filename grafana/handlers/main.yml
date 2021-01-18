@@ -4,18 +4,6 @@
     daemon_reload: true
   listen: reload systemd
 
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld
-
-- name: reload firewalld
-  service:
-    name: firewalld
-    state: reloaded
-  listen: reload firewalld
-
 - name: restart grafana
   service:
     name: grafana-server

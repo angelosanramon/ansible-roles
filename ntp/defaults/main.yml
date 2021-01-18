@@ -1,0 +1,23 @@
+---
+ntp_timezone: America/Los_Angeles
+
+ntp_chrony_servers: []
+ntp_chrony_pool: time.google.com iburst
+ntp_chrony_driftfile: /var/lib/chrony/drift
+ntp_chrony_makestep: 1.0 3
+ntp_chrony_rtcsync:
+ntp_chrony_logdir: /var/log/chrony
+ntp_chrony_keyfile: /etc/chrony.keys
+ntp_chrony_leapsectz: right/UTC
+# ntp_chrony_hwtimestamp: *
+# ntp_chrony_minsources: 2
+# ntp_chrony_allow: 192.168.0.0/16
+# ntp_chrony_local: stratum 10
+# ntp_chrony_log: measurements statistics tracking
+
+ntp_timesyncd_servers: "time.google.com"
+ntp_timesyncd_fallback_servers: ""
+ntp_timesyncd_root_distance_max_sec: 5
+ntp_timesyncd_poll_interval_min_sec: 32
+ntp_timesyncd_poll_interval_max_sec: 2048
+ntp_timesyncd_connection_retry_sec: 30

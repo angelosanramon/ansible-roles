@@ -1,0 +1,32 @@
+---
+rsyslog_config_dir: /etc/rsyslog.d
+rsyslog_work_dir: /var/lib/rsyslog
+rsyslog_syslogd_options: []
+rsyslog_main_configurations: |-
+  module(load="imuxsock" SysSock.Use="off")
+  module(load="imjournal" StateFile="imjournal.state")
+  module(load="builtin:omfile" Template="RSYSLOG_TraditionalFileFormat")
+  global(workDirectory="{{ rsyslog_work_dir }}")
+  include(file="{{ rsyslog_config_dir }}/*.conf" mode="optional")
+  *.info;mail.none;authpriv.none;cron.none    /var/log/messages
+  authpriv.*                                  /var/log/secure
+  mail.*                                      -/var/log/maillog
+  cron.*                                      /var/log/cron
+  *.emerg                                     :omusrmsg:*
+  uucp,news.crit                              /var/log/spooler
+  local7.*                                    /var/log/boot.log
+
+rsyslog_configurations: []
+# rsyslog_configurations:
+#   - name: haproxy.conf
+#     configuration: |-
+#       $ModLoad imudp
+#       $UDPServerAddress 127.0.0.1
+#       $UDPServerRun 514
+#       local0.* /var/log/haproxy/haproxy.log
+#   - name: keepalived.conf
+#     configuration: |-
+#       if ($programname startswith "Keepalived") then {
+#           action(type="omfile" file="/var/log/keepalived/keepalived.log")
+#           stop
+#       }

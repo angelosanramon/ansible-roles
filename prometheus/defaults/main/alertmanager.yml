@@ -29,21 +29,3 @@ alertmanager_route_config: []
 alertmanager_receivers_config:
 
 alertmanager_inhibit_rules_config:
-
-alertmanager_firewall_ports:
-  - "{{ alertmanager_web_listen_port }}/tcp"
-  - "{{ alertmanager_cluster_port }}/tcp"
-
-alertmanager_logrotate_config:
-  paths:
-    - "{{ alertmanager_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload alertmanager
-      endscript

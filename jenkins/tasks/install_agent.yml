@@ -1,10 +1,7 @@
-- name: install required packages
+- name: install java
   package:
-    name: "{{ item }}"
+    name: "{{ 'java-basic' if ansible_os_family == 'ClearLinux' else 'java' }}"
     state: present
-  with_items:
-    - java
-    - python3-lxml
 
 - name: create agent user group
   group:
@@ -49,18 +46,17 @@
         url: >-
           {{- "https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/" +
           "swarm-client/maven-metadata.xml" -}}
-        dest: /tmp
+        dest: /tmp/
 
     - name: get latest version from metadata
-      xml:
-        path: /tmp/maven-metadata.xml
-        xpath: /metadata/versioning/latest
-        content: text
+      shell: >-
+        cat /tmp/maven-metadata.xml | grep latest | awk -F'>' '{print $2}' | 
+        awk -F'<' '{print $1}'
       register: version
+      changed_when: false
 
     - set_fact:
-        jenkins_agent_version: >-
-          {{- version.matches[0].latest -}}
+        jenkins_agent_version: "{{ version.stdout }}"
   when: jenkins_agent_version == 'latest'
 
 - set_fact:

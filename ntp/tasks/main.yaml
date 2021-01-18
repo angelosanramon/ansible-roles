@@ -1,0 +1,13 @@
+---
+- name: setup chrony
+  include_tasks: install_chrony.yaml
+  when: ansible_os_family == "RedHat" or
+        ansible_os_family == "Fedora"
+
+- name: setup timesyncd
+  include_tasks: install_timesyncd.yaml
+  when: ansible_os_family == "ClearLinux"
+
+- name: set timezone
+  timezone:
+    name: "{{ ntp_timezone }}"

@@ -1,16 +1,9 @@
 ---
-- name: sync clock
-  hosts: 
-    - consul_servers
-    - haproxy_servers
-  become: yes
-  roles:
-    - name: chrony
-
 - name: setup consul cluster
   hosts: consul_servers
   become: yes
   roles: 
+    - name: ntp
     - name: consul
       vars:
         consul_config_options:
@@ -44,6 +37,32 @@
           encrypt: KVEWESv8Odqmlrn3BXMkHMnrFhkTEtIXk+ZXYqYvzYY=
           auto_encrypt:
             allow_tls: true
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8600/tcp
+          - 8600/udp
+          - 8500-8501/tcp
+          - 8301-8302/tcp
+          - 8301-8302/udp
+          - 8300/tcp
+          - 21000-21255/tcp
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: consul
+            paths:
+              - "{{ consul_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload consul
+                endscript
 
 - name: setup haproxy cluster
   hosts: haproxy_servers
@@ -54,6 +73,43 @@
         name: keepalived
         tasks_from: sysctl
   roles: 
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+          - 8500/tcp
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: haproxy
       vars:
         haproxy_defaults_config:
@@ -84,9 +140,6 @@
                 hostvars[hostname].ansible_host + ':' + '8500') }}
               {%- endfor -%}
               {{ servers }}
-        haproxy_firewall_ports:
-          - 8404/tcp
-          - 8500/tcp
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100

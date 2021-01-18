@@ -1,0 +1,22 @@
+---
+logrotate_default_config_options:
+  - weekly
+  - rotate 4
+  - create
+  - dateext
+
+logrotate_config_options: []
+# logrotate_config_options:
+#   - name: haproxy
+#     paths:
+#       - /var/log/haproxy/*.log
+#     options:
+#       - daily
+#       - missingok
+#       - rotate 7
+#       - dateext
+#       - copytruncate
+#       - |-
+#         postrotate
+#             /usr/bin/systemctl reload haproxy
+#         endscript

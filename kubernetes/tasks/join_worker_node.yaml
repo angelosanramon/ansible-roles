@@ -1,0 +1,61 @@
+---
+- name: copy admin kubeconfig
+  copy:
+    content: "{{ kubeconfig }}"
+    dest: "{{ kubernetes_config_path }}/admin.conf"
+    mode: 0600
+
+- name: generate kubeadm join worker config file
+  template:
+    src: kubeadm_join_config.yaml.j2
+    dest: "{{ kubernetes_config_path }}/kubeadm_join_config.yaml"
+    mode: 0644
+
+- block:
+    - name: check if worker node has been joined previously
+      stat:
+        path: "{{ kubernetes_config_path }}/kubelet.conf"
+      register: kubelet_conf
+
+    - name: unjoin worker node when previously joined
+      shell: "{{ kubernetes_install_path }}/unjoin.sh"
+      when: kubelet_conf.stat.exists
+      changed_when: false
+
+    - name: joining worker node
+      shell: >-
+        source /etc/profile.d/k8stools-path.sh &&
+        {{ kubernetes_install_path }}/kubeadm join
+        --config {{ kubernetes_config_path }}/kubeadm_join_config.yaml
+        {{ kubernetes_kubeadm_join_cmdline_flags|join(" ") }}
+      changed_when: false
+
+    - name: waiting for worker node to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+        {{ kubernetes_install_path }}/kubectl get nodes -o wide | 
+        grep {{ ansible_host }} | grep -w Ready
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+      changed_when: false
+
+    - name: wait for kube-proxy to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-proxy | grep -w 1/1
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: label worker node
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl label --overwrite node 
+        {{ ansible_nodename }}
+        node-role.kubernetes.io/worker=""
+      changed_when: false
+  when: inventory_hostname not in worker_nodes

@@ -21,15 +21,3 @@
     name: haproxy
     state: reloaded
   listen: reload haproxy
-
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld
-
-- name: restart rsyslog
-  service:
-    name: rsyslog
-    state: restarted
-  listen: restart rsyslog

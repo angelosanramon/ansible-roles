@@ -1,9 +1,4 @@
-- name: remove loopback entry from /etc/hosts file
-  lineinfile:
-    path: /etc/hosts
-    regexp: '^127\.0\.0\.1\s+{{ inventory_hostname }}'
-    state: absent
-
+---
 - name: add every hosts to /etc/hosts file
   lineinfile:
     path: /etc/hosts
@@ -11,4 +6,11 @@
     line: >-
       {{ hostvars[item].ansible_host }} {{ hostvars[item].inventory_hostname}}
     state: present
+    create: yes
   with_items: "{{ groups[haproxy_servers_group_name] }}"
+
+- name: remove loopback entry from /etc/hosts file
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.0\.1\s+{{ inventory_hostname }}'
+    state: absent

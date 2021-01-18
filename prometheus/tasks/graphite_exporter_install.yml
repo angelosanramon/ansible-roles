@@ -1,42 +1,41 @@
-- name: install and enable firewalld
-  include_tasks: firewalld.yml
-  vars:
-    prometheus_component: graphite_exporter
-    firewall_ports: "{{ graphite_exporter_firewall_ports }}"
-
+---
 - name: create graphite exporter user group
   group:
-    name: '{{ graphite_exporter_group }}'
+    name: "{{ graphite_exporter_group }}"
     state: present
 
 - name: create graphite exporter user
   user:
-    name: '{{ graphite_exporter_user }}'
-    group: '{{ graphite_exporter_group }}'
+    name: "{{ graphite_exporter_user }}"
+    group: "{{ graphite_exporter_group }}"
     shell: /sbin/nologin
 
 - name: create graphite exporter directories
   file:
-    path: '{{ item.path }}'
+    path: "{{ item.path }}"
     state: directory
-    owner: '{{ item.user }}'
-    group: '{{ item.group }}'
-    mode: '{{ item.mode }}'
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: 0755
   with_items:
-    - { path: '{{ graphite_exporter_config_path }}',
-        user: '{{ graphite_exporter_user}}',
-        group: '{{ graphite_exporter_group }}',
-        mode: '0755' }
-    - { path: '{{ graphite_exporter_log_path }}',
-        user: '{{ graphite_exporter_user}}',
-        group: '{{ graphite_exporter_group }}',
-        mode: '0755' }
+    - { path: "{{ graphite_exporter_config_path }}",
+        owner: "{{ graphite_exporter_user}}",
+        group: "{{ graphite_exporter_group }}" }
+    - { path: "{{ graphite_exporter_log_path }}",
+        owner: "{{ graphite_exporter_user}}",
+        group: "{{ graphite_exporter_group }}" }
+    - { path: "{{ graphite_exporter_bin_path }}",
+        owner: root,
+        group: root }
+    - { path: /usr/local/src,
+        owner: root,
+        group: root }
 
 - name: download graphite exporter binary package
   get_url:
-    url: '{{ graphite_exporter_src_url }}'
-    dest: /usr/local/src
-    checksum: 'sha256:{{ graphite_exporter_src_checksum }}'
+    url: "{{ graphite_exporter_src_url }}"
+    dest: /usr/local/src/
+    checksum: sha256:{{ graphite_exporter_src_checksum }}
   register: download_result
 
 - set_fact:
@@ -47,7 +46,7 @@
     - name: uncompress graphite exporter binary package
       unarchive:
         src: /usr/local/src/{{ source_filename }}
-        dest: /usr/local/src
+        dest: /usr/local/src/
         remote_src: yes
 
     - set_fact:
@@ -90,9 +89,3 @@
     name: graphite_exporter
     enabled: yes
     state: started
-
-- name: configure logrotate
-  include_tasks: logrotate.yml
-  vars:
-    prometheus_component: graphite_exporter
-    logrotate_config: "{{ graphite_exporter_logrotate_config }}"

@@ -1,0 +1,10 @@
+{%- for fc in kubernetes_calico_felixconfiguration -%}
+---
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  {{ fc.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ fc.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

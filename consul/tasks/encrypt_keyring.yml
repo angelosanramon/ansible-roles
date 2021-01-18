@@ -28,8 +28,7 @@
     - name: set encrypt keyring fact from config file
       set_fact:
         encrypt_keyring: >-
-          {{ config_file_content.content|b64decode|from_json|
-            json_query('encrypt') }}
+          {{ (config_file_content.content|b64decode|from_json).encrypt }}
       no_log: true
       when: config_file_check.stat.exists
   when: encrypt_keyring == '' or encrypt_keyring is none

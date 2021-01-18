@@ -1,0 +1,141 @@
+---
+- name: install CNI plugins
+  unarchive:
+    src: >-
+      {{- 'https://github.com/containernetworking/plugins/releases/download/v' +
+      kubernetes_cni_plugin_version + '/cni-plugins-linux-amd64-v' + 
+      kubernetes_cni_plugin_version + '.tgz' -}}
+    dest: "{{ kubernetes_cni_plugin_bin_path }}"
+    owner: root
+    group: root
+    mode: 0755
+    remote_src: yes
+    validate_certs: no
+
+- name: install CRI tool
+  unarchive:
+    src: >-
+      {{- 'https://github.com/kubernetes-sigs/cri-tools/releases/download/v' +
+      kubernetes_crictl_version + '/crictl-v' + kubernetes_crictl_version + 
+      '-linux-amd64.tar.gz' -}}
+    dest: "{{ kubernetes_install_path }}"
+    owner: root
+    group: root
+    mode: 0755
+    remote_src: yes
+    validate_certs: no
+
+- name: install kubectl
+  get_url:
+    url: >-
+      {{- 'https://storage.googleapis.com/kubernetes-release/release/v' +
+      kubernetes_version + '/bin/linux/amd64/kubectl' -}}
+    dest: "{{ kubernetes_install_path }}/kubectl"
+    owner: root
+    group: root
+    mode: 0755
+    validate_certs: no
+    force: yes
+
+- name: install kubelet
+  get_url:
+    url: >-
+      {{- 'https://storage.googleapis.com/kubernetes-release/release/v' +
+      kubernetes_version + '/bin/linux/amd64/kubelet' -}}
+    dest: "{{ kubernetes_install_path }}/kubelet"
+    owner: root
+    group: root
+    mode: 0755
+    validate_certs: no
+    force: yes
+
+- name: create kubelet systemd file
+  template:
+    src: kubelet.service.j2
+    dest: /etc/systemd/system/kubelet.service
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart kubelet
+
+- name: create kubelet systemd override directory
+  file:
+    path: /etc/systemd/system/kubelet.service.d
+    mode: 0755
+    state: directory
+
+- name: create kubelet systemd override file for kubernetes
+  template:
+    src: kubelet.service_kubeadm.j2
+    dest: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+    mode: 0644
+  notify:
+    - reload systemd
+    - restart kubelet
+
+- name: install kubeadm
+  get_url:
+    url: >-
+      {{- 'https://storage.googleapis.com/kubernetes-release/release/v' +
+      kubernetes_version + '/bin/linux/amd64/kubeadm' -}}
+    dest: "{{ kubernetes_install_path }}/kubeadm"
+    mode: 0755
+    validate_certs: no
+    force: yes
+
+- name: get latest version of etcdctl
+  uri:
+    url: https://api.github.com/repos/etcd-io/etcd/releases/latest
+  register: etcdctl_version
+
+- name: download etcdctl
+  unarchive:
+    src: >-
+      {{- 'https://github.com/etcd-io/etcd/releases/download/' +
+      etcdctl_version.json.tag_name + '/etcd-' + etcdctl_version.json.tag_name +
+      '-linux-amd64.tar.gz' -}}
+    dest: /usr/local/bin
+    owner: root
+    group: root
+    remote_src: yes
+    exclude:
+      - Documentation
+      - '*.md'
+    extra_opts:
+      - --strip-components=1
+
+- name: create profile directory
+  file:
+    path: /etc/profile.d
+    state: directory
+  when: ansible_os_family == "ClearLinux"
+
+- name: add kubernetes tools install path to the system-wide path.
+  copy:
+    dest: /etc/profile.d/k8stools-path.sh
+    content: PATH=$PATH:{{ kubernetes_install_path }}
+
+- name: create unjoin script
+  template:
+    src: unjoin.sh.j2
+    dest: "{{ kubernetes_install_path }}/unjoin.sh"
+    mode: 0744
+
+- name: create unjoin service
+  template:
+    src: k8s-node-unjoin.service.j2
+    dest: /etc/systemd/system/k8s-node-unjoin.service
+    mode: 0644
+  notify:
+    - reload systemd
+
+- name: enable services
+  service:
+    name: "{{ item }}"
+    enabled: yes
+  with_items:
+    - kubelet
+    - docker
+    - k8s-node-unjoin

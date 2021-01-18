@@ -1,8 +1,8 @@
 ---
 prometheus_src_url: >-
-  https://github.com/prometheus/prometheus/releases/download/v2.22.0/prometheus-2.22.0.linux-amd64.tar.gz
+  https://github.com/prometheus/prometheus/releases/download/v2.24.0/prometheus-2.24.0.linux-amd64.tar.gz
 prometheus_src_checksum: >-
-  b9894d2bf7fae235c924c7dadda0fbc214ffc18a2bb3e9306f6fbecb589d5263
+  e54c37eb30879f5b6416b11a96217a1dfcff65e0eca1ab5ce7b783b940cfe0eb
 prometheus_user: prometheus
 prometheus_group: prometheus
 prometheus_config_path: /etc/prometheus
@@ -68,20 +68,3 @@ prometheus_components:
     installed: false
   statsd_exporter:
     installed: false
-
-prometheus_firewall_ports:
-  - "{{ prometheus_web_listen_port }}/tcp"
-
-prometheus_logrotate_config:
-  paths:
-    - "{{ prometheus_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload prometheus
-      endscript

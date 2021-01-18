@@ -4,12 +4,6 @@
     daemon_reload: true
   listen: reload systemd
 
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld
-
 - name: restart drbd
   service:
     name: drbd
@@ -21,9 +15,3 @@
     name: drbd
     state: reloaded
   listen: reload drbd
-
-- name: restart rsyslog
-  service:
-    name: rsyslog
-    state: restarted
-  listen: restart rsyslog

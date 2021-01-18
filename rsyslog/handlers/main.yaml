@@ -1,0 +1,11 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted
+  listen: restart rsyslog

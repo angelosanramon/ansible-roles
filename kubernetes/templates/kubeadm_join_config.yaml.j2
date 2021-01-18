@@ -1,0 +1,61 @@
+---
+{% set ca_cert_hashes = [kubeadm_join_discovery_token] -%}
+{%- if kubernetes_kubeadm_joinconfiguration.discovery.bootstrapToken.caCertHashes
+is defined -%}
+  {%- set ca_cert_hashes = ca_cert_hashes + 
+    kubernetes_kubeadm_joinconfiguration.discovery.bootstrapToken.caCertHashes
+  -%}
+{%- endif -%}
+{%- set join_configuration = {
+      'discovery': {
+        'bootstrapToken': {
+          'apiServerEndpoint': kubernetes_cluster_endpoint,
+          'token': kubeadm_join_token,
+          'caCertHashes': ca_cert_hashes
+        }
+      },
+      'nodeRegistration': {
+        'kubeletExtraArgs': {
+          'runtime-cgroups': kubernetes_kubelet_runtime_cgroups,
+          'bootstrap-kubeconfig': kubernetes_config_path + 
+            '/bootstrap-kubelet.conf',
+          'kubeconfig': kubernetes_config_path + '/kubelet.conf',
+          'cni-bin-dir': kubernetes_cni_plugin_bin_path
+        }
+      }
+    } 
+-%}
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+{{ kubernetes_kubeadm_joinconfiguration|
+   combine(join_configuration, recursive=True)|
+   to_nice_yaml(indent=2) 
+-}}
+
+---
+{% set kubelet_configuration = {
+      'port': kubernetes_kubelet_port,
+      'volumePluginDir': kubernetes_kubelet_volume_plugin_path,
+      'cgroupDriver': kubernetes_kubelet_cgroup_driver,
+      'kubeletCgroups': kubernetes_kubelet_runtime_cgroups,
+      'staticPodPath': kubernetes_kubelet_static_pod_path
+    }
+-%}
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+{{ kubernetes_kubeadm_kubeletconfiguration|
+   combine(kubelet_configuration, recursive=True)|
+   to_nice_yaml(indent=2)
+-}}
+
+---
+{% set kubeproxyconfiguration = {
+      'clusterCIDR': kubernetes_pod_network_cidr
+    } 
+-%}
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+{{ kubernetes_kubeadm_kubeproxyconfiguration|
+   combine(kubeproxyconfiguration, recursive=True)|
+   to_nice_yaml(indent=2) 
+}}

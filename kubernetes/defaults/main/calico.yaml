@@ -1,0 +1,65 @@
+kubernetes_calico_version: 3.17.1
+kubernetes_calico_config_path: "{{ kubernetes_config_path }}/calico"
+kubernetes_calico_overlay_mode: ipip #vxlan
+
+kubernetes_calico_bgp_configuration: {}
+# kubernetes_calico_bgp_configuration:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_bgp_peer: {}
+# kubernetes_calico_bgp_peer:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_felix_configuration: {}
+# kubernetes_calico_felix_configuration:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_global_network_policy: {}
+
+kubernetes_calico_global_network_set: {}
+# kubernetes_calico_globalnetworkset:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_host_endpoint: {}
+# kubernetes_calico_host_endpoint:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_ip_pool: {}
+# kubernetes_calico_ip_pool:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_kube_controllers_configuration: {}
+# kubernetes_calico_kube_controllers_configuration:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_network_policy: {}
+# kubernetes_calico_network_policy:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_network_set: {}
+# kubernetes_calico_network_set:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_node: {}
+# kubernetes_calico_node:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_profile: {}
+# kubernetes_calico_profile:
+#   - metadata: {}
+#     spec: {}
+
+kubernetes_calico_workload_endpoint: {}
+# kubernetes_calico_workload_endpoint:
+#   - metadata: {}
+#     spec: {}

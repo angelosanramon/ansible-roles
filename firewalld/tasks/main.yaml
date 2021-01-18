@@ -1,0 +1,27 @@
+---
+- name: install firewalld
+  package:
+    name: firewalld
+    state: present
+
+- name: start firewalld
+  service:
+    name: firewalld
+    state: started
+
+- name: firewall ports
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  with_items: "{{ firewalld_ports }}"
+  notify: restart firewalld
+
+- name: firewall rich rules
+  firewalld:
+    rich_rule: "{{ item }}"
+    permanent: yes
+    immediate: yes
+    state: enabled
+  with_items: "{{ firewalld_rich_rules }}"
+  notify: restart firewalld

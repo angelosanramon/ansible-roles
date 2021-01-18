@@ -1,7 +1,13 @@
 - name: install java
   package:
-    name: java
+    name: "{{ 'java-basic' if ansible_os_family == 'ClearLinux' else 'java' }}"
     state: present
+
+- name: install fonts for clear linux distro
+  package:
+    name: fonts-basic
+    state: present
+  when: ansible_os_family == "ClearLinux"
 
 - name: create jenkins user group
   group:
@@ -34,10 +40,13 @@
     - "{{ jenkins_pid_path }}"
     - "{{ jenkins_tls_path }}"
 
+# - set_fact:
+#     jenkins_base_src_url: >-
+#       {{- "https://ftp-nyc.osuosl.org/pub/jenkins/war/" + 
+#       jenkins_version|string -}}
+
 - set_fact:
-    jenkins_base_src_url: >-
-      {{- "https://ftp-nyc.osuosl.org/pub/jenkins/war/" + 
-      jenkins_version|string -}}
+    jenkins_base_src_url: "{{ jenkins_src_url }}/{{ jenkins_version|string }}"
 
 - name: download checksum file
   get_url:
@@ -53,7 +62,7 @@
   get_url:
     url: "{{ jenkins_base_src_url }}/jenkins.war"
     dest: "{{ jenkins_war_path }}"
-    checksum: "sha256:{{ (checksum.content|b64decode).split()[0] }}"
+    checksum: sha256:{{ (checksum.content|b64decode).split()[0] }}
   notify: restart jenkins
 
 - name: create jenkins systemd file

@@ -158,28 +158,6 @@ haproxy_resolvers_config: {}
 #       - valid 10s
 #       - obsolete 30s
 
-haproxy_firewall_ports:
-  - 8404/tcp
-  
-haproxy_logrotate_config:
-  paths:
-    - "{{ haproxy_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload haproxy
-      endscript
-
-haproxy_syslog_config:
-  - facility_code: local0
-    severity_level: '*'
-    logfile: "{{ haproxy_log_path + '/' + haproxy_log_file }}"
-
 haproxy_build_options:
   - >-
     {%- if ansible_kernel.split('-')[0] is
@@ -200,7 +178,7 @@ haproxy_build_options:
 
 haproxy_build_dependencies:
 - make
-- gcc
-- pcre-devel
-- openssl-devel
-- systemd-devel
+- "{{ 'c-basic' if ansible_os_family == 'ClearLinux' else 'gcc' }}"
+- "{{ 'devpkg-pcre' if ansible_os_family == 'ClearLinux' else 'pcre-devel' }}"
+- "{{ 'devpkg-openssl' if ansible_os_family == 'ClearLinux' else 'openssl-devel' }}"
+- "{{ 'devpkg-systemd' if ansible_os_family == 'ClearLinux' else 'systemd-devel' }}"

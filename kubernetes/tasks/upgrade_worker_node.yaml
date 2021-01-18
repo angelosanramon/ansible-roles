@@ -1,0 +1,48 @@
+- name: drain worker node
+  shell: >-
+     KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+     {{ kubernetes_install_path }}/kubectl drain
+     {{ hostvars[worker_node].ansible_nodename }}
+     --ignore-daemonsets
+  register: drain_result
+  until: drain_result.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false
+
+- name: upgrade worker node
+  shell: >-
+    {{ kubernetes_install_path }}/kubeadm upgrade node
+  register: upgrade_result
+  until: upgrade_result.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false
+
+- name: restart kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+
+- name: uncordon worker node
+  shell: >
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+    {{ kubernetes_install_path }}/kubectl uncordon
+    {{ hostvars[worker_node].ansible_nodename }}
+  register: uncordon_result
+  until: uncordon_result.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false
+
+- name: wait for worker node to become ready
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/kubelet.conf 
+    {{ kubernetes_install_path }}/kubectl get nodes | 
+    grep {{ hostvars[worker_node].ansible_nodename }} | grep -w Ready
+  register: wait_result
+  until: wait_result.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: false

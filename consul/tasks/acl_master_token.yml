@@ -19,8 +19,8 @@
     - name: set acl master token fact from config file
       set_fact:
         acl_master_token: >-
-          {{ config_file_content.content|b64decode|from_json|
-            json_query('acl.tokens.master') }}
+          {{ (config_file_content.content|b64decode|
+            from_json).acl.tokens.master }}
       no_log: true
       when: config_file_check.stat.exists
   when: acl_master_token == ''

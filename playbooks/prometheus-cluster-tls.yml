@@ -6,8 +6,8 @@
     - name: letsencrypt
       vars:
         letsencrypt_acme_email: email@example.com
-        letsencrypt_aws_access_key: my_aws_access_key
-        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_aws_access_key: aws_access_key
+        letsencrypt_aws_secret_key: aws_secret_key
         letsencrypt_route53_zone: example.com
         letsencrypt_certificates:
           - common_name: example.com
@@ -16,20 +16,43 @@
               - alertmanager.example.com
             valid_days: 7
 
-- name: sync clock
-  hosts:
-    - prometheus_servers
-    - haproxy_servers
-  become: yes
-  roles:
-    - name: chrony
-
 - name: setup drbd for prometheus cluster
   hosts: prometheus_servers
   become: yes
   vars:
     keepalived_vip: 192.168.3.101
   roles:
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: drbd.conf
+            configuration: |-
+              if $programname == "drbd" or ($syslogtag == "kernel:" and
+              $msg contains "drbd") then {
+                  action(type="omfile" file="{{ drdb_log_path }}/{{ drbd_log_file }}")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ drbd_listen_ports }}/tcp"
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: drbd        
+            paths:
+              - "{{ drdb_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload drbd
+                endscript
     - name: drbd
       vars:
         drbd_servers_group_name: prometheus_servers
@@ -189,6 +212,56 @@
   hosts: prometheus_servers
   become: yes
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ prometheus_web_listen_port }}/tcp"
+          - "{{ alertmanager_web_listen_port }}/tcp"
+          - "{{ alertmanager_cluster_port }}/tcp"
+          - "{{ node_exporter_web_listen_port }}/tcp"
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: prometheus        
+            paths:
+              - "{{ prometheus_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload prometheus
+                endscript
+          - name: alertmanager        
+            paths:
+              - "{{ alertmanager_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload alertmanager
+                endscript
+          - name: node_exporter        
+            paths:
+              - "{{ node_exporter_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload node_exporter
+                endscript
     - name: prometheus
       include_vars: defaults/node_exporter.yml
       vars:
@@ -266,6 +339,35 @@
         mode: 0744
       register: prometheus_chk_script
   roles:
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: keepalived.conf
+            configuration: |-
+              if ($programname startswith "Keepalived") then {
+                  action(type="omfile" file="/var/log/keepalived/keepalived.log")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.101
@@ -382,6 +484,53 @@
         domain_name: example.com
       register: copy_letsencrypt_certs
   roles:
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: keepalived.conf
+            configuration: |-
+              if ($programname startswith "Keepalived") then {
+                  action(type="omfile" file="/var/log/keepalived/keepalived.log")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - 8404/tcp
+          - 9090/tcp
+          - 9093/tcp
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: haproxy
+            paths:
+              - /var/log/haproxy/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload haproxy
+                endscript
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100
@@ -477,10 +626,6 @@
             option: httpchk GET /#/status
             default-server: check inter 10s
             server: alertmanager 192.168.3.101:9093
-        haproxy_firewall_ports:
-          - 9090/tcp
-          - 9093/tcp
-          - 8404/tcp
   post_tasks:
     - name: install node exporter
       include_role:

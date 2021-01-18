@@ -1,0 +1,32 @@
+---
+- name: pre-install tasks
+  include_tasks: pre_install_tasks.yaml
+
+- name: install kubernetes tools
+  include_tasks: install_k8stools.yaml
+
+- name: initialize cluster
+  include_tasks: initialize_cluster.yml
+
+- name: install/update cni providers
+  include_tasks: install_cni_providers.yaml
+  args:
+    apply:
+      delegate_to: "{{ control_plane_nodes|first }}"
+  run_once: yes
+
+- name: join control planes
+  include_tasks: join_control_plane.yaml
+  when: 
+    - inventory_hostname in groups[kubernetes_control_plane_group_name]
+    - inventory_hostname not in control_plane_nodes
+
+- name: join worker nodes
+  include_tasks: join_worker_node.yaml
+  when: 
+    - inventory_hostname in groups[kubernetes_workers_group_name]
+    - inventory_hostname not in worker_nodes
+
+- name: upgrade cluster
+  include_tasks: upgrade_cluster.yaml
+  run_once: yes

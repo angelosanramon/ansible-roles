@@ -7,9 +7,3 @@
 
 - name: install plugins
   include_tasks: install_plugins.yml
-
-- name: install and enable firewalld
-  include_tasks: firewalld.yml
-
-- name: configure logrotate
-  include_tasks: logrotate.yml

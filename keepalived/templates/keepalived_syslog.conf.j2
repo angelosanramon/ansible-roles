@@ -1,5 +1,0 @@
-if ($programname startswith "Keepalived") then {
-    action(type="omfile" file="{{ keepalived_log_path }}/{{
-    keepalived_log_file }}")
-    stop
-}

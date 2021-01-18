@@ -1,0 +1,140 @@
+---
+driver:
+  name: vagrant
+
+provisioner:
+  name: shell
+
+platforms:
+  #- name: centos/8
+  - name: AntonioMeireles/ClearLinux
+
+suites:
+  - name: haproxy1
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      #box: centos/8
+      customize:
+        cpus: 1
+        memory: 512
+      vm_hostname: haproxy1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.250"}]
+        - ["private_network", {ip: "192.168.3.214"}]
+  - name: haproxy2
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      #box: centos/8
+      customize:
+        cpus: 1
+        memory: 512
+      vm_hostname: haproxy2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.2.250"}]
+        - ["private_network", {ip: "192.168.3.215"}]
+  - name: k8scp1
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      customize:
+        cpus: 1
+        memory: 2048
+      vm_hostname: k8scp1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.17"}]
+  - name: k8scp2
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      customize:
+        cpus: 1
+        memory: 2048
+      vm_hostname: k8scp2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.18"}]
+  - name: k8scp3
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      customize:
+        cpus: 1
+        memory: 2048
+      vm_hostname: k8scp3.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.19"}]
+  - name: k8sworker1
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      customize:
+        cpus: 1
+        memory: 2048
+      vm_hostname: k8sworker1.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.20"}]
+  - name: k8sworker2
+    provisioner:
+      command: |-
+        sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
+        /etc/ssh/sshd_config && sudo systemctl restart sshd
+    driver_config:
+      customize:
+        cpus: 1
+        memory: 2048
+      vm_hostname: k8sworker2.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.21"}]
+  - name: ansible
+    provisioner:
+      name: ansible_playbook
+      roles_path: .
+      ansible_inventory: hosts
+      playbook: playbooks/kubernetes-cluster.yml
+      custom_pre_install_command: |-
+        if [ -f "/etc/os-release" ]; then
+            /bin/cat /etc/os-release | grep -w "Clear Linux OS" > /dev/null
+            if [ $? -eq 0 ]; then
+                if [ -z "$(/bin/which ansible)" ]; then
+                    sudo swupd bundle-add ansible
+                fi
+            fi
+        fi
+      ansible_playbook_command: |-
+        os="clearlinux"
+        if [ "$os" == "clearlinux" ]; then
+          username=clear
+          password='V@grant!'
+        else
+          username=vagrant
+          password=vagrant
+        fi
+
+        ansible-playbook \
+        -e "ansible_user=$username ansible_password=$password" \
+        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 \
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts \
+        /tmp/kitchen/kubernetes-cluster.yml
+      require_chef_for_busser: false
+      max_retries: 5
+    driver_config:
+      #box: centos/8
+      customize:
+        cpus: 1
+        memory: 512
+      vm_hostname: ansible.cluster.local
+      network:
+        - ["private_network", {ip: "192.168.1.254"}]

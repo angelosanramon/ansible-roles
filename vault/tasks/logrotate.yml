@@ -1,7 +1,0 @@
-- name: create vault logrotate config file
-  template:
-    dest: /etc/logrotate.d/vault
-    src: vault_logrotate.j2
-    owner: root
-    group: root
-    mode: 0644

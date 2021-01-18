@@ -4,9 +4,3 @@
 
 - name: install drbd
   include_tasks: install.yml
-
-- name: enable firewall
-  include_tasks: firewalld.yml
-
-- name: configure rsyslog
-  include_tasks: syslog.yml

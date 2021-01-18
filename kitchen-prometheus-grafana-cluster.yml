@@ -14,6 +14,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -23,6 +24,7 @@ suites:
         - ["private_network", {ip: "192.168.1.14"}]
         - ["private_network", {ip: "192.168.3.210"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd1.vdi
@@ -41,6 +43,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -50,6 +53,7 @@ suites:
         - ["private_network", {ip: "192.168.2.14"}]
         - ["private_network", {ip: "192.168.3.211"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd2.vdi
@@ -68,6 +72,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -77,6 +82,7 @@ suites:
         - ["private_network", {ip: "192.168.1.13"}]
         - ["private_network", {ip: "192.168.3.208"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd3.vdi
@@ -95,6 +101,7 @@ suites:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
+
         if [ ! -b /dev/sdb1 ]; then
             sudo parted --script /dev/sdb mklabel gpt mkpart primary 0% 100%
         fi
@@ -104,6 +111,7 @@ suites:
         - ["private_network", {ip: "192.168.2.13"}]
         - ["private_network", {ip: "192.168.3.209"}]
       customize:
+        cpus: 1
         memory: 1024
         createhd:
           - filename: /tmp/drbd4.vdi
@@ -123,38 +131,64 @@ suites:
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: haproxy1.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.250"}]
         - ["private_network", {ip: "192.168.3.212"}]
-      customize:
-        memory: 1024
   - name: haproxy2
     provisioner:
       command: |-
         sudo sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" \
         /etc/ssh/sshd_config && sudo systemctl restart sshd
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: haproxy2.cluster.local
       network:
         - ["private_network", {ip: "192.168.2.250"}]
         - ["private_network", {ip: "192.168.3.213"}]
-      customize:
-        memory: 1024
   - name: ansible
     provisioner:
       name: ansible_playbook
       roles_path: .
       ansible_inventory: hosts
       playbook: playbooks/prometheus-grafana-cluster.yml
-      ansible_playbook_command: >-
-        ansible-playbook -e "ansible_user=vagrant 
-        ansible_password=vagrant" --ssh-extra-args="-o ConnectTimeout=10 
-        -o ConnectionAttempts=60 -o StrictHostKeyChecking=no" 
-        -i /tmp/kitchen/hosts /tmp/kitchen/prometheus-grafana-cluster.yml
+      custom_pre_install_command: |-
+        if [ -f "/etc/os-release" ]; then
+            /bin/cat /etc/os-release | grep -w "Clear Linux OS" > /dev/null
+            if [ $? -eq 0 ]; then
+                if [ -z "$(/bin/which ansible)" ]; then
+                    sudo swupd bundle-add ansible
+                fi
+            fi
+        fi
+      ansible_playbook_command: |-
+        username=vagrant
+        password=vagrant
+
+        if [ -f "/etc/os-release" ]; then
+            /bin/cat /etc/os-release | grep -w "Clear Linux OS" > /dev/null
+            if [ $? -eq 0 ]; then
+                username=clear
+                password='V@grant!'           
+            fi
+        fi
+
+        ansible-playbook \
+        -e "ansible_user=$username ansible_password=$password" \
+        --ssh-extra-args="-o ConnectTimeout=10 -o ConnectionAttempts=60 \
+        -o StrictHostKeyChecking=no" -i /tmp/kitchen/hosts \
+        /tmp/kitchen/prometheus-grafana-cluster.yml
       require_chef_for_busser: false
       max_retries: 5
     driver_config:
+      customize:
+        cpus: 1
+        memory: 512
       vm_hostname: ansible.cluster.local
       network:
         - ["private_network", {ip: "192.168.1.254"}]

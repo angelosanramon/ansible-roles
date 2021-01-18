@@ -1,16 +1,41 @@
 ---
-- name: sync clock
-  hosts: grafana_servers
-  become: yes
-  roles:
-    - name: chrony
-
 - name: setup drbd for grafana cluster
   hosts: grafana_servers
   become: yes
   vars:
     keepalived_vip: 192.168.3.100
   roles:
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: drbd.conf
+            configuration: |-
+              if $programname == "drbd" or ($syslogtag == "kernel:" and
+              $msg contains "drbd") then {
+                  action(type="omfile" file="{{ drdb_log_path }}/{{ drbd_log_file }}")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ drbd_listen_ports }}/tcp"
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: drbd        
+            paths:
+              - "{{ drdb_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload drbd
+                endscript
     - name: drbd
       vars:
         drbd_servers_group_name: grafana_servers
@@ -170,6 +195,27 @@
   hosts: grafana_servers
   become: yes
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ grafana_listen_port }}/tcp"
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: grafana        
+            paths:
+              - "{{ grafana_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload grafana
+                endscript
     - name: grafana
       vars:
         grafana_configs:
@@ -205,6 +251,35 @@
         mode: 0744
       register: grafana_chk_script
   roles:
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: keepalived.conf
+            configuration: |-
+              if ($programname startswith "Keepalived") then {
+                  action(type="omfile" file="/var/log/keepalived/keepalived.log")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100

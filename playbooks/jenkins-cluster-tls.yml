@@ -6,8 +6,8 @@
     - name: letsencrypt
       vars:
         letsencrypt_acme_email: email@example.com
-        letsencrypt_aws_access_key: my_aws_access_key
-        letsencrypt_aws_secret_key: my_aws_secret_key
+        letsencrypt_aws_access_key: aws_access_key
+        letsencrypt_aws_secret_key: aws_secret_key
         letsencrypt_route53_zone: example.com
         letsencrypt_certificates:
           - common_name: example.com
@@ -15,20 +15,43 @@
               - jenkins.example.com
             valid_days: 7
 
-- name: sync clock
-  hosts:
-    - jenkins_masters
-    - jenkins_slaves
-  become: yes
-  roles:
-    - name: chrony
-
 - name: install drbd for jenkins cluster
   hosts: jenkins_masters
   become: yes
   vars:
     keepalived_vip: 192.168.3.100
   roles:
+    - name: ntp
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: drbd.conf
+            configuration: |-
+              if $programname == "drbd" or ($syslogtag == "kernel:" and
+              $msg contains "drbd") then {
+                  action(type="omfile" file="{{ drdb_log_path }}/{{ drbd_log_file }}")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_ports:
+          - "{{ drbd_listen_ports }}/tcp"
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: drbd        
+            paths:
+              - "{{ drdb_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload drbd
+                endscript
     - name: drbd
       vars:
         drbd_servers_group_name: jenkins_masters
@@ -199,6 +222,36 @@
         domain_name: example.com
       register: copy_letsencrypt_certs
   roles:
+    - name: ntp
+    - name: firewalld
+      vars:
+        firewalld_ports: >-
+          {%- set ports = [] -%}
+          {{- ports.append(jenkins_http_port|string + "/tcp") if
+              jenkins_http_port|default(-1, true)|int > 0 else None -}}
+          {{- ports.append(jenkins_slave_agent_port|string + "/tcp") if
+              jenkins_slave_agent_port|default(-1, true)|int > 0 else None -}}
+          {{- ports.append(jenkins_https_port|string + "/tcp") if
+              jenkins_https_port|default(-1, true)|int > 0 else None -}}
+          {{- ports.append(jenkins_http2_port|string + "/tcp") if
+              jenkins_http2_port|default(-1, true)|int > 0 else None -}}
+          {{- ports -}}
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: jenkins
+            paths:
+              - "{{ jenkins_log_path }}/*.log"
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl restart jenkins
+                endscript
     - name: jenkins
       vars:
         keepalived_vip: 192.168.3.100
@@ -249,7 +302,7 @@
           - { name: apache-httpcomponents-client-4-api, version: latest }
           - { name: jsch, version: latest }
           - { name: ace-editor, version: latest }
-          - { name: token-macro, version: latest }
+          - { name: token-macro, version: 2.13 }
           - { name: bouncycastle-api, version: latest }
           - { name: ssh, version: latest }
           - { name: matrix-auth, version: latest }
@@ -270,7 +323,7 @@
           - { name: jquery-detached, version: latest }
           - { name: momentjs, version: latest }
           - { name: git-server, version: latest }
-          - { name: branch-api, version: latest }
+          - { name: branch-api, version: 2.6.2 }
           - { name: pipeline-graph-analysis, version: latest }
           - { name: pipeline-stage-tags-metadata, version: latest }
           - { name: pipeline-model-api, version: latest }
@@ -383,6 +436,35 @@
         mode: 0744
       register: jenkins_chk_script
   roles:
+    - name: rsyslog
+      vars:
+        rsyslog_configurations:
+          - name: keepalived.conf
+            configuration: |-
+              if ($programname startswith "Keepalived") then {
+                  action(type="omfile" file="/var/log/keepalived/keepalived.log")
+                  stop
+              }
+    - name: firewalld
+      vars:
+        firewalld_rich_rules:
+          - rule protocol value='vrrp' accept
+    - name: logrotate
+      vars:
+        logrotate_config_options:
+          - name: keepalived
+            paths:
+              - /var/log/keepalived/*.log
+            options:
+              - daily
+              - missingok
+              - rotate 7
+              - dateext
+              - copytruncate
+              - |-
+                postrotate
+                    /usr/bin/systemctl reload keepalived
+                endscript
     - name: keepalived
       vars:
         keepalived_vip: 192.168.3.100

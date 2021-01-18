@@ -1,5 +1,5 @@
 ---
-drbd_pkg_url: https://elrepo.org/linux/elrepo/el8/x86_64/RPMS/kmod-drbd90-9.0.23-1.el8_2.elrepo.x86_64.rpm
+drbd_pkg_url: https://elrepo.org/linux/elrepo/el8/x86_64/RPMS/kmod-drbd90-9.0.25-2.el8_3.elrepo.x86_64.rpm
 drbd_util_pkg_url: https://elrepo.org/linux/elrepo/el8/x86_64/RPMS/drbd90-utils-9.13.1-1.el8.elrepo.x86_64.rpm
 drdb_log_path: /var/log/drbd
 drbd_log_file: drbd.log
@@ -108,6 +108,3 @@ drbd_resources_conf: []
 #         address: 192.168.1.71:7788
 #     connection-mesh:
 #       hosts: drbd1.cluster.local drbd2.cluster.local
-
-drbd_firewall_ports:
-  - "{{ drbd_listen_ports }}/tcp"

@@ -1,0 +1,53 @@
+---
+- name: install rsyslog
+  package:
+    name: rsyslog
+    state: present
+
+- block:
+    - name: create rsyslog main configuration file
+      copy:
+        content: "{{ rsyslog_main_configurations }}"
+        dest: /etc/rsyslog.conf
+        owner: root
+        group: root
+        mode: 0644
+      notify: restart rsyslog
+
+    - name: create rsyslog work directory
+      file:
+        path: "{{ rsyslog_work_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+        
+    - name: create rsyslog systemd unit file
+      template:
+        src: rsyslog.service.j2
+        dest: /etc/systemd/system/rsyslog.service
+        owner: root
+        group: root
+        mode: 0644
+      notify:
+        - reload systemd
+        - restart rsyslog
+  when: ansible_os_family == "ClearLinux"
+
+- name: create rsyslog config directory
+  file:
+    path: "{{ rsyslog_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: create configuration files
+  copy:
+    content: "{{ item.configuration }}"
+    dest: "{{ rsyslog_config_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items: "{{ rsyslog_configurations }}"
+  notify: restart rsyslog

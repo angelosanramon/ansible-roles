@@ -5,7 +5,8 @@ only support route53 DNS provider.
 The code used in this role is copied from https://graspingtech.com/ansible-lets-encrypt/
 
 ### Platform:
-* Tested on Centos 8 only
+* Centos 8 
+* ClearLinux
 
 ### Author:
 Angelo San Ramon

@@ -1,5 +1,6 @@
 ---
-jenkins_version: latest
+jenkins_version: 2.263.2
+jenkins_src_url: http://mirrors.jenkins-ci.org/war-stable
 jenkins_user: jenkins
 jenkins_group: jenkins
 jenkins_http_port: 8080
@@ -28,30 +29,18 @@ jenkins_master_group_name: jenkins_masters
 jenkins_cmdline_options: []
 jenkins_java_options: []
 jenkins_environment_variables: []
+
+# plugins
+jenkins_plugins_url: http://mirrors.jenkins-ci.org/plugins
+
+jenkins_mandatory_plugins:
+  - { name: snakeyaml-api, version: latest }
+  - { name: configuration-as-code, version: latest }
+  - { name: configuration-as-code-groovy, version: latest }
+  - { name: swarm, version: latest }
+  - { name: script-security, version: latest }
+  - { name: command-launcher, version: latest }
+  - { name: jdk-tool, version: latest }
+  - { name: trilead-api, version: latest }
+
 jenkins_plugins: []
-
-jenkins_firewall_ports: >-
-  {%- set ports = [] -%}
-  {{- ports.append(jenkins_http_port|string + "/tcp") if 
-      jenkins_http_port|default(-1, true)|int > 0 else None -}}
-  {{- ports.append(jenkins_slave_agent_port|string + "/tcp") if
-      jenkins_slave_agent_port|default(-1, true)|int > 0 else None -}}
-  {{- ports.append(jenkins_https_port|string + "/tcp") if 
-      jenkins_https_port|default(-1, true)|int > 0 else None -}}
-  {{- ports.append(jenkins_http2_port|string + "/tcp") if
-      jenkins_http2_port|default(-1, true)|int > 0 else None -}}
-  {{- ports -}}
-
-jenkins_logrotate_config:
-  paths:
-    - "{{ jenkins_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl restart jenkins
-      endscript

@@ -1,0 +1,10 @@
+{%- for ns in kubernetes_calico_networkset -%}
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkSet
+metadata:
+  {{ ns.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ ns.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

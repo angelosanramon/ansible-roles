@@ -8,7 +8,11 @@
 
 - set_fact:
     all_auth_methods_names: >-
-      {{ get_all_auth_methods_result.json|json_query('[*].Name') }}
+      {%- set auth_methods = [] -%}
+      {%- for auth_method in get_all_auth_methods_result.json -%}
+        {{ auth_methods.append(auth_method.Name) }}
+      {%- endfor -%}
+      {{ auth_methods }}
 
 - name: create auth method
   uri:

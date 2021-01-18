@@ -1,33 +1,38 @@
-- name: install and enable firewalld
-  include_tasks: firewalld.yml
-  vars:
-    prometheus_component: node_exporter
-    firewall_ports: "{{ node_exporter_firewall_ports }}"
-
+---
 - name: create node exporter user group
   group:
-    name: '{{ node_exporter_group }}'
+    name: "{{ node_exporter_group }}"
     state: present
 
 - name: create node exporter user
   user:
-    name: '{{ node_exporter_user }}'
-    group: '{{ node_exporter_group }}'
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
     shell: /sbin/nologin
 
-- name: create node exporter log directory
+- name: create node exporter directories
   file:
-    path: '{{ node_exporter_log_path }}'
+    path: "{{ item.path }}"
     state: directory
-    owner: '{{ node_exporter_user }}'
-    group: '{{ node_exporter_group }}'
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
     mode: 0755
+  with_items:
+    - { path: "{{ node_exporter_log_path }}",
+        owner: "{{ node_exporter_user}}",
+        group: "{{ node_exporter_group }}" }
+    - { path: "{{ node_exporter_bin_path }}",
+        owner: root,
+        group: root }
+    - { path: /usr/local/src,
+        owner: root,
+        group: root }
 
 - name: download node exporter binary package
   get_url:
-    url: '{{ node_exporter_src_url }}'
-    dest: /usr/local/src
-    checksum: 'sha256:{{ node_exporter_src_checksum }}'
+    url: "{{ node_exporter_src_url }}"
+    dest: /usr/local/src/
+    checksum: sha256:{{ node_exporter_src_checksum }}
   register: download_result
 
 - set_fact:
@@ -38,7 +43,7 @@
     - name: uncompress node exporter binary package
       unarchive:
         src: /usr/local/src/{{ source_filename }}
-        dest: /usr/local/src
+        dest: /usr/local/src/
         remote_src: yes
 
     - set_fact:
@@ -70,9 +75,3 @@
     name: node_exporter
     enabled: yes
     state: started
-
-- name: configure logrotate
-  include_tasks: logrotate.yml
-  vars:
-    prometheus_component: node_exporter
-    logrotate_config: "{{ node_exporter_logrotate_config }}"

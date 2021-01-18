@@ -8,7 +8,11 @@
 
 - set_fact:
     all_session_names: >-
-      {{ get_all_sessions_result.json|json_query('[*].Name') }}
+      {%- set sessions = [] -%}
+      {%- for session in get_all_sessions_result.json -%}
+        {{ sessions.append(session.Name) }}
+      {%- endfor -%}
+      {{ sessions }}
 
 - set_fact:
     url: >-

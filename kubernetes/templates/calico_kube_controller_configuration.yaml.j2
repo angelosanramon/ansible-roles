@@ -1,0 +1,7 @@
+apiVersion: projectcalico.org/v3
+kind: KubeControllersConfiguration
+metadata:
+  name: default
+spec:
+  {{ kubernetes_calico_kubecontrollersconfiguration|to_nice_yaml(indent=2)|
+  indent(2) }}

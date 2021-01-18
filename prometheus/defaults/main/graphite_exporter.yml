@@ -19,21 +19,3 @@ graphite_exporter_graphite_listen_address: >-
 graphite_exporter_cmdline_options: []
 
 graphite_exporter_mappings_config: []
-
-graphite_exporter_firewall_ports:
-  - "{{ graphite_exporter_web_listen_port }}/tcp"
-  - "{{ graphite_exporter_graphite_listen_port }}/tcp"
-
-graphite_exporter_logrotate_config:
-  paths:
-    - "{{ graphite_exporter_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload graphite_exporter
-      endscript

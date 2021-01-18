@@ -1,6 +1,0 @@
-{%- for path in grafana_logrotate_config.paths -%}
-  {{- path + '\n' -}}{{ '{\n' if loop.last else '' }}
-{%- endfor -%}
-{%- for option in grafana_logrotate_config.options -%}
-  {{- ' '*4 + option|indent() + '\n' -}}{{ '}' if loop.last else '' }}
-{%- endfor -%}

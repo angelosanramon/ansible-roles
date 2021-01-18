@@ -30,6 +30,3 @@
 - name: turn off swapping
   include_tasks: swaps.yml
   when: vault_swap_off
-
-- name: configure logrotate
-  include_tasks: logrotate.yml

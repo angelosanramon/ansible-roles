@@ -1,33 +1,38 @@
-- name: install and enable firewalld
-  include_tasks: firewalld.yml
-  vars:
-    prometheus_component: pushgateway
-    firewall_ports: "{{ pushgateway_firewall_ports }}"
-
+---
 - name: create pushgateway user group
   group:
-    name: '{{ pushgateway_group }}'
+    name: "{{ pushgateway_group }}"
     state: present
 
 - name: create pushgateway user
   user:
-    name: '{{ pushgateway_user }}'
-    group: '{{ pushgateway_group }}'
+    name: "{{ pushgateway_user }}"
+    group: "{{ pushgateway_group }}"
     shell: /sbin/nologin
 
-- name: create pushgateway log directory
+- name: create pushgateway directories
   file:
-    path: '{{ pushgateway_log_path }}'
+    path: "{{ item.path }}"
     state: directory
-    owner: '{{ pushgateway_user }}'
-    group: '{{ pushgateway_group }}'
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
     mode: 0755
+  with_items:
+    - { path: "{{ pushgateway_log_path }}",
+        owner: "{{ pushgateway_user}}",
+        group: "{{ pushgateway_group }}" }
+    - { path: "{{ pushgateway_bin_path }}",
+        owner: root,
+        group: root }
+    - { path: /usr/local/src,
+        owner: root,
+        group: root }
 
 - name: download pushgateway binary package
   get_url:
-    url: '{{ pushgateway_src_url }}'
-    dest: /usr/local/src
-    checksum: 'sha256:{{ pushgateway_src_checksum }}'
+    url: "{{ pushgateway_src_url }}"
+    dest: /usr/local/src/
+    checksum: sha256:{{ pushgateway_src_checksum }}
   register: download_result
 
 - set_fact:
@@ -38,7 +43,7 @@
     - name: uncompress pushgateway binary package
       unarchive:
         src: /usr/local/src/{{ source_filename }}
-        dest: /usr/local/src
+        dest: /usr/local/src/
         remote_src: yes
 
     - set_fact:
@@ -70,9 +75,3 @@
     name: pushgateway
     enabled: yes
     state: started
-
-- name: configure logrotate
-  include_tasks: logrotate.yml
-  vars:
-    prometheus_component: node_exporter
-    logrotate_config: "{{ node_exporter_logrotate_config }}"

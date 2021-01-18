@@ -1,0 +1,206 @@
+---
+- name: get control plane nodes
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+    {{ kubernetes_install_path }}/kubectl get nodes 2>/dev/null | 
+    grep master | grep {{ hostvars[item].ansible_nodename }} >/dev/null 2>&1 
+    && echo {{ hostvars[item].inventory_hostname }} || echo ''
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups[kubernetes_control_plane_group_name] }}"
+  register: get_control_planes
+  run_once: yes
+  changed_when: false
+
+- name: get worker nodes
+  shell: >-
+    KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+    {{ kubernetes_install_path }}/kubectl get nodes 2>/dev/null | 
+    grep worker | grep {{ hostvars[item].ansible_nodename }} >/dev/null 2>&1 
+    && echo {{ hostvars[item].inventory_hostname }} || echo ''
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups[kubernetes_workers_group_name] }}"
+  register: get_worker
+  run_once: yes
+  changed_when: false
+
+- set_fact:
+    control_plane_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for result in get_control_planes.results -%}
+        {{- nodes.append(result.stdout) if result.stdout != "" else "" -}}
+      {%- endfor -%}
+      {{- nodes -}}
+    worker_nodes: >-
+      {%- set nodes = [] -%}
+      {%- for result in get_worker.results -%}
+        {{- nodes.append(result.stdout) if result.stdout != "" else "" -}}
+      {%- endfor -%}
+      {{- nodes -}}
+
+- name: generate kubeadm init config file
+  template:
+    src: kubeadm_init_config.yaml.j2
+    dest: "{{ kubernetes_config_path }}/kubeadm_init_config.yaml"
+    mode: 0644
+
+- name: initialize cluster
+  block:
+    - name: check if control plane has been initialized previously
+      find:
+        paths: "{{ kubernetes_kubelet_static_pod_path }}"
+        patterns: "*.*"
+      register: find_result
+
+    - name: rollback previous initialization
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+        {{ kubernetes_install_path }}/kubeadm reset --force
+      when: find_result.files|length > 0
+      changed_when: false
+
+    - name: initialize first control plane node
+      shell: |-
+        source /etc/profile.d/k8stools-path.sh
+        {{ kubernetes_install_path }}/kubeadm init --upload-certs \
+        --config {{ kubernetes_config_path }}/kubeadm_init_config.yaml \
+        {{ kubernetes_kubeadm_init_cmdline_flags|join(" ") }}
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+    #   register: initialize_result
+
+    # - debug:
+    #     msg: "{{ initialize_result }}"
+
+    - name: install cni providers
+      include_tasks: install_cni_providers.yaml
+      args:
+        apply:
+          delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+
+    - name: wait for control plane node to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get nodes -o wide | 
+        grep {{ ansible_host }} | grep -w Ready
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for etcd to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep etcd | grep -w 1/1
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+      when: kubernetes_etcd_location == 'local'
+
+    - name: wait for api-server to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-apiserver | grep -w 1/1
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-controller-manager to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-controller-manager | grep -w 1/1
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-scheduler to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-scheduler | grep -w 1/1
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - name: wait for kube-proxy to become ready
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubectl get pods -n kube-system -o wide |
+        grep {{ ansible_host }} | grep kube-proxy | grep -w 1/1
+      delegate_to: "{{ groups[kubernetes_control_plane_group_name]|first }}"
+      register: result
+      until: result.rc == 0
+      retries: 10
+      delay: 60
+
+    - set_fact:
+        control_plane_nodes: >-
+          {{ control_plane_nodes + [groups[kubernetes_control_plane_group_name]|
+          first] }}
+  when: control_plane_nodes|length == 0
+  run_once: yes
+
+- set_fact:
+    join_needed: >-
+      {%- if groups[kubernetes_control_plane_group_name]|
+        difference(control_plane_nodes)|length >0 or 
+        groups[kubernetes_workers_group_name]|
+        difference(worker_nodes)|length > 0 -%}
+        {{- true -}}
+      {%- else -%}
+        {{- false -}}
+      {%- endif -%}
+  run_once: yes
+
+- block:
+    - name: get join token
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf 
+        {{ kubernetes_install_path }}/kubeadm token list | 
+        grep authentication | awk '{print $1}'
+      register: join_token
+      delegate_to: "{{ control_plane_nodes|first }}"
+      changed_when: false
+
+    - name: get join discovery token
+      shell: >-
+        openssl x509 -pubkey -in {{ kubernetes_config_path }}/pki/ca.crt | 
+        openssl rsa -pubin -outform der 2>/dev/null | 
+        openssl dgst -sha256 -hex | sed 's/^.* //'
+      register: discovery_token
+      delegate_to: "{{ control_plane_nodes|first }}"
+      changed_when: false
+
+    - name: get join certificate key
+      shell: >-
+        KUBECONFIG={{ kubernetes_config_path }}/admin.conf
+        {{ kubernetes_install_path }}/kubeadm init phase upload-certs
+        --upload-certs 2>/dev/null | tail -n 1
+      register: certificate_key
+      delegate_to: "{{ control_plane_nodes|first }}"
+      changed_when: false
+
+    - name: get admin kubeconfig
+      slurp:
+        src: "{{ kubernetes_config_path }}/admin.conf"
+      register: kubeconfig
+
+    - set_fact:
+        kubeadm_join_token: "{{- join_token.stdout -}}"
+        kubeadm_join_discovery_token: >-
+          {{- 'sha256:' + discovery_token.stdout -}}
+        kubeadm_join_certificate_key: "{{- certificate_key.stdout -}}"
+        kubeconfig: "{{ kubeconfig.content|b64decode }}"
+  when: join_needed
+  run_once: yes
+

@@ -1,0 +1,23 @@
+# https://pkg.go.dev/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2#InitConfiguration
+# https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
+kubernetes_kubeadm_initconfiguration: {}
+
+# https://pkg.go.dev/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2#ClusterConfiguration
+kubernetes_kubeadm_clusterconfiguration: {}
+
+# https://pkg.go.dev/k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2#JoinConfiguration
+kubernetes_kubeadm_joinconfiguration: {}
+
+# https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy
+# https://godoc.org/k8s.io/kube-proxy/config/v1alpha1#KubeProxyConfiguration
+kubernetes_kubeadm_kubeproxyconfiguration:
+  proxyMode: ipvs
+
+# https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/kubelet/config/v1beta1/types.go
+kubernetes_kubeadm_kubeletconfiguration: {}
+
+# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init
+kubernetes_kubeadm_init_cmdline_flags: []
+
+# https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join
+kubernetes_kubeadm_join_cmdline_flags: []

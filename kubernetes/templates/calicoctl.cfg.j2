@@ -1,0 +1,21 @@
+{%- set endpoints = [] -%}
+{%- if kubernetes_etcd_location == 'local' -%}
+  {%- for node in groups[kubernetes_control_plane_group_name] -%}
+    {%- set endpoint = 'https://' + hostvars[node].ansible_host + ':2379' -%}
+    {{ endpoints.append(endpoint) }}
+  {%- endfor -%}
+{%- else -%}
+  {%- set endpoints = kubernetes_external_etcd_endpoints -%}
+{%- endif -%}
+apiVersion: projectcalico.org/v3
+kind: CalicoAPIConfig
+metadata:
+spec:
+  datastoreType: etcdv3
+  etcdEndpoints: {{ endpoints|join(',') }}
+  etcdCACert: |
+    {{ ca_cert|b64decode|indent }}
+  etcdCert: |
+    {{ etcd_crt|b64decode|indent }}
+  etcdKey: |
+    {{ etcd_key|b64decode|indent }}

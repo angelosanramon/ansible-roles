@@ -17,20 +17,3 @@ mysqld_exporter_cmdline_options: []
 
 mysqld_exporter_mysql_username: mysqlusername
 mysqld_exporter_mysql_password: mysqlpassword
-
-mysqld_exporter_firewall_ports:
-  - "{{ mysqld_exporter_web_listen_port }}/tcp"
-
-mysqld_exporter_logrotate_config:
-  paths:
-    - "{{ mysqld_exporter_log_path }}/*.log"
-  options:
-    - daily
-    - missingok
-    - rotate 7
-    - dateext
-    - copytruncate
-    - |-
-      postrotate
-          /usr/bin/systemctl reload mysqld_exporter
-      endscript

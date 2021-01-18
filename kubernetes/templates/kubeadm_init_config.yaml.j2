@@ -1,0 +1,125 @@
+---
+{% set init_configuration = {
+      'localAPIEndpoint': {
+        'advertiseAddress': ansible_host,
+        'bindPort': kubernetes_cluster_endpoint.split(':')[1]|int
+      },
+      'nodeRegistration': {
+        'kubeletExtraArgs': {
+          'volume-plugin-dir': kubernetes_kubelet_volume_plugin_path,
+          'runtime-cgroups': kubernetes_kubelet_runtime_cgroups,
+          'root-dir': kubernetes_kubelet_root_path,
+          'config': kubernetes_kubelet_root_path + '/config.yaml',
+          'kubeconfig': kubernetes_config_path + '/kubelet.conf',
+          'cni-bin-dir': kubernetes_cni_plugin_bin_path
+        }      
+      }
+    }
+-%}
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+{{ kubernetes_kubeadm_initconfiguration|
+    combine(init_configuration, recursive=True)|
+    to_nice_yaml(indent=2)
+-}}
+
+---
+{% set api_server_cert_sans = [
+      kubernetes_cluster_endpoint.split(':')[0],
+      ansible_host,
+      '127.0.0.1',
+      'localhost'
+    ]
+-%}
+{%- if kubernetes_kubeadm_clusterconfiguration.apiServer.certSANs is defined -%}
+  {%- set api_server_cert_sans = api_server_cert_sans +
+      kubernetes_kubeadm_clusterconfiguration.apiServer.certSANs
+  -%}
+{%- endif -%}
+{%- set etcd_server_cert_sans = [inventory_hostname] -%}
+{%- if kubernetes_kubeadm_clusterconfiguration.etcd.local.serverCertSANs is
+    defined -%}
+  {%- set etcd_server_cert_sans = etcd_server_cert_sans +
+      kubernetes_kubeadm_clusterconfiguration.etcd.local.serverCertSANs
+  -%}
+{%- endif -%}
+{%- set etcd_peer_cert_sans = [inventory_hostname] -%}
+{%- if kubernetes_kubeadm_clusterconfiguration.etcd.local.peerCertSANs is
+    defined -%}
+  {%- set etcd_peer_cert_sans = etcd_peer_cert_sans +
+      kubernetes_kubeadm_clusterconfiguration.etcd.local.peerCertSANs
+  -%}
+{%- endif -%}
+{%- set cluster_configuration = {
+      'clusterName': kubernetes_cluster_name,
+      'kubernetesVersion': 'v' + kubernetes_version,
+      'controlPlaneEndpoint': kubernetes_cluster_endpoint,
+      'etcd': {
+        'local': {
+          'serverCertSANs': etcd_server_cert_sans,
+          'peerCertSANs': etcd_peer_cert_sans
+        }
+      },
+      'networking': {
+        'serviceSubnet': kubernetes_service_cidr,
+        'podSubnet': kubernetes_pod_network_cidr,
+        'dnsDomain': kubernetes_service_dns_domain
+      },
+      'apiServer': {
+        'certSANs': api_server_cert_sans,
+        'extraArgs': {
+          'service-node-port-range': kubernetes_service_port_range
+        }
+      },
+      'controllerManager': {
+        'extraArgs': {
+          'flex-volume-plugin-dir': kubernetes_kubelet_volume_plugin_path
+        }
+      }
+    }
+-%}
+{%- if kubernetes_etcd_location == 'external' -%}
+  {%- set cluster_configuration = cluster_configuration|combine({'etcd': {
+        'external': {
+          'endpoints': kubernetes_external_etcd_endpoints,
+          'caFile': kubernetes_external_etcd_cafile,
+          'certFile': kubernetes_external_etcd_certfile,
+          'keyFile': kubernetes_external_etcd_keyfile
+        }
+      }})
+  -%}
+{%- endif -%}
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+{{ kubernetes_kubeadm_clusterconfiguration|
+   combine(cluster_configuration, recursive=True)|
+   to_nice_yaml(indent=2)
+-}}
+
+---
+{% set kubelet_configuration = {
+      'port': kubernetes_kubelet_port,
+      'volumePluginDir': kubernetes_kubelet_volume_plugin_path,
+      'cgroupDriver': kubernetes_kubelet_cgroup_driver,
+      'kubeletCgroups': kubernetes_kubelet_runtime_cgroups,
+      'staticPodPath': kubernetes_kubelet_static_pod_path
+    }
+-%}
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+{{ kubernetes_kubeadm_kubeletconfiguration|
+   combine(kubelet_configuration, recursive=True)|
+   to_nice_yaml(indent=2)
+-}}
+
+---
+{% set kubeproxyconfiguration = {
+      'clusterCIDR': kubernetes_pod_network_cidr
+    } 
+-%}
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+{{ kubernetes_kubeadm_kubeproxyconfiguration|
+   combine(kubeproxyconfiguration, recursive=True)|
+   to_nice_yaml(indent=2) 
+}}

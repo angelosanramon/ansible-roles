@@ -22,9 +22,3 @@
 - name: unseal vault
   shell: /etc/vault/scripts/unseal.sh
   listen: unseal vault
-
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld

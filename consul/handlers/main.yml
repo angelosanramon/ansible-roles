@@ -24,9 +24,3 @@
     name: consul
     state: started
   listen: start consul
-
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld

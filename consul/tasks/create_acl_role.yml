@@ -7,7 +7,12 @@
   register: get_all_roles_result
 
 - set_fact:
-    all_roles_names: "{{ get_all_roles_result.json|json_query('[*].Name') }}"
+    all_roles_names: >-
+      {%- set roles = [] -%}
+      {%- for role in get_all_roles_result.json -%}
+        {{ roles.append(role.Name) }}
+      {%- endfor -%}
+      {{ roles }}
 
 - name: create acl role
   uri:
@@ -47,8 +52,18 @@
         all_policies: '{{ all_policies_result.json }}'
         existing_role: '{{ get_role_result.json }}'
         param_description: "{{ acl_role.Description|default('', true) }}"
-        param_policy_names: "{{ acl_role.Policies|json_query('[*].Name') }}"
-        param_policy_ids: "{{ acl_role.Policies|json_query('[*].ID') }}"
+        param_policy_names: >-
+          {%- set policies = [] -%}
+          {%- for policy in acl_role.Policies|default([], true) -%}
+            {{ policies.append(policy.Name) if policy.Name is defined else "" }}
+          {%- endfor -%}
+          {{ policies }}
+        param_policy_ids: >-
+          {%- set policies = [] -%}
+          {%- for policy in acl_role.Policies|default([], true) -%}
+            {{ policies.append(policy.ID) if policy.ID is defined else "" }}
+          {%- endfor -%}
+          {{ policies }}
         param_serviceidentities: >-
           {{ acl_role.ServiceIdentities|default([], true) }}
         param_nodeidentities: >-

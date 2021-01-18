@@ -4,12 +4,6 @@
     daemon_reload: true
   listen: reload systemd
 
-- name: restart firewalld
-  service:
-    name: firewalld
-    state: restarted
-  listen: restart firewalld
-
 - name: include prometheus handler
   include: prometheus.yml
 

@@ -1,0 +1,10 @@
+{%- for gns in kubernetes_calico_globalnetworkset -%}
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkSet
+metadata:
+  {{ gns.metadata|to_nice_yaml(indent=2)|indent(width=2) -}}
+spec:
+  {{ gns.spec|to_nice_yaml(indent=2)|indent(width=2) }}
+
+{%- endfor -%}

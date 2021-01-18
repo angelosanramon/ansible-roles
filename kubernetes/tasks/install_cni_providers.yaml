@@ -1,0 +1,2 @@
+- name: install calico cni provider
+  include_tasks: install_calico.yaml
